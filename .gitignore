@@ -30,9 +30,9 @@ Thumbs.db
 *.swp
 
 # Models (large binaries — exported by scripts, not committed)
-models/cache/
-*.onnx
+models/*/
 !models/.gitkeep
+*.onnx
 
 # Benchmark scratch (only commit results/run_NNN/ and results/reference/)
 results/scratch/

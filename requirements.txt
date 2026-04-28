@@ -18,7 +18,7 @@ onnx>=1.15,<2.0
 # torch is needed only at export time; runtime path is pure ONNX Runtime.
 transformers>=4.40,<5.0
 optimum[onnxruntime]>=1.20,<2.0
-torch>=2.2,<3.0
+torch>=2.2,<2.7
 
 # Optional GPU backend (W8) — install separately if GPU available
 # onnxruntime-gpu>=1.17,<2.0
