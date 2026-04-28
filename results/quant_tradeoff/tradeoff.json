@@ -1,0 +1,52 @@
+{
+  "fp32_bench": "results/run_003",
+  "int8_bench": "results/run_007",
+  "fp32_accuracy": {
+    "model_dir": "models/distilbert-sst2-fp32",
+    "model_id": "distilbert-base-uncased-finetuned-sst-2-english",
+    "precision": "fp32",
+    "model_size_bytes": 267958137,
+    "examples_evaluated": 872,
+    "correct": 794,
+    "accuracy": 0.9105504587155964,
+    "per_class": {
+      "negative": {
+        "correct": 381,
+        "total": 428,
+        "accuracy": 0.8901869158878505
+      },
+      "positive": {
+        "correct": 413,
+        "total": 444,
+        "accuracy": 0.9301801801801802
+      }
+    },
+    "batch_size": 16,
+    "elapsed_sec": 10.0007518340135,
+    "examples_per_sec": 87.19344450026705
+  },
+  "int8_accuracy": {
+    "model_dir": "models/distilbert-sst2-int8",
+    "model_id": "distilbert-base-uncased-finetuned-sst-2-english",
+    "precision": "int8-dynamic",
+    "model_size_bytes": 67384953,
+    "examples_evaluated": 872,
+    "correct": 791,
+    "accuracy": 0.9071100917431193,
+    "per_class": {
+      "negative": {
+        "correct": 383,
+        "total": 428,
+        "accuracy": 0.8948598130841121
+      },
+      "positive": {
+        "correct": 408,
+        "total": 444,
+        "accuracy": 0.918918918918919
+      }
+    },
+    "batch_size": 16,
+    "elapsed_sec": 3.4946871669963,
+    "examples_per_sec": 249.52161905510073
+  }
+}
