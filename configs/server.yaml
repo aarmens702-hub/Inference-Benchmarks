@@ -13,7 +13,7 @@ model:
   backend: onnxruntime-cpu  # onnxruntime-cpu | onnxruntime-cuda
 
 batching:
-  enabled: false            # toggled on starting in W3
+  enabled: true             # W3: dynamic batching on by default
   max_batch_size: 16
   max_wait_ms: 10
 

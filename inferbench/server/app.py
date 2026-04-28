@@ -1,11 +1,9 @@
 """FastAPI application factory for InferBench.
 
 Loads server configuration from configs/server.yaml (or $INFERBENCH_CONFIG),
-constructs the ModelRunner at startup, and registers routes from routes.py.
-
-W1 wires a synchronous /infer that calls ModelRunner.run directly. The
-async batcher (W3) and queue/cache (W4) plug in here without changing the
-public schema.
+constructs the ModelRunner at startup, and (when batching.enabled is true)
+starts a DynamicBatcher background task. Routes auto-detect whether a
+batcher is present.
 """
 
 from __future__ import annotations
@@ -17,6 +15,7 @@ from pathlib import Path
 import yaml
 from fastapi import FastAPI
 
+from inferbench.engine.batcher import BatcherConfig, DynamicBatcher
 from inferbench.engine.model_runner import ModelRunner
 from inferbench.server.routes import register_routes
 
@@ -30,6 +29,8 @@ async def _lifespan(app: FastAPI):
     config_path = Path(os.environ.get("INFERBENCH_CONFIG", "configs/server.yaml"))
     config = _load_config(config_path)
     model_cfg = config["model"]
+    batching_cfg = config.get("batching", {}) or {}
+    queue_cfg = config.get("queue", {}) or {}
 
     runner = ModelRunner(
         model_dir=model_cfg["path"],
@@ -37,9 +38,27 @@ async def _lifespan(app: FastAPI):
     )
     runner.warmup(n=3)
 
+    batcher: DynamicBatcher | None = None
+    if batching_cfg.get("enabled", False):
+        batcher = DynamicBatcher(
+            runner,
+            BatcherConfig(
+                max_batch_size=int(batching_cfg.get("max_batch_size", 16)),
+                max_wait_ms=float(batching_cfg.get("max_wait_ms", 10.0)),
+                queue_max_size=int(queue_cfg.get("max_size", 0)),
+            ),
+        )
+        await batcher.start()
+
     app.state.runner = runner
+    app.state.batcher = batcher
     app.state.config = config
-    yield
+
+    try:
+        yield
+    finally:
+        if batcher is not None:
+            await batcher.stop()
 
 
 def create_app() -> FastAPI:
