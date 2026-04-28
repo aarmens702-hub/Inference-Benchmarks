@@ -6,7 +6,7 @@ HOST ?= 127.0.0.1
 PORT ?= 8000
 SCENARIO ?= A
 
-.PHONY: help install venv export-model serve test bench bench-clean clean
+.PHONY: help install venv export-model serve test bench bench-k6 bench-clean clean
 
 help:
 	@echo "InferBench Makefile targets:"
@@ -35,6 +35,9 @@ test:
 
 bench:
 	$(PY) -m inferbench.benchmarks.run_benchmark --scenario $(SCENARIO)
+
+bench-k6:
+	k6 run inferbench/benchmarks/k6/infer_load_test.js
 
 bench-clean:
 	rm -rf results/scratch
