@@ -1,0 +1,153 @@
+{
+  "meta": {
+    "scenario": "C",
+    "started_at": "2026-04-28T21:08:41.795876+00:00",
+    "base_url": "http://127.0.0.1:8000",
+    "system": {
+      "hostname": "Mac-2.lan",
+      "platform": "macOS-15.5-arm64-arm-64bit",
+      "python_version": "3.11.14",
+      "machine": "arm64",
+      "cpu_count": 8
+    },
+    "workload": "open_loop_poisson",
+    "duration_sec": 30.0,
+    "warmup_sec": 5.0,
+    "backend": "onnxruntime-cpu",
+    "precision": "fp32"
+  },
+  "sweep": [
+    {
+      "concurrency": "poisson@50rps",
+      "results": {
+        "latency_e2e": {
+          "count": 1485,
+          "mean_ms": 21.50712828536013,
+          "p50_ms": 20.33895894419402,
+          "p90_ms": 28.3972088014707,
+          "p95_ms": 31.298508215695616,
+          "p99_ms": 36.526438593864455,
+          "min_ms": 7.866957923397422,
+          "max_ms": 101.8384579801932
+        },
+        "latency_inference": {
+          "count": 1485,
+          "mean_ms": 8.959064936274757,
+          "p50_ms": 8.173124981112778,
+          "p90_ms": 13.86094139888883,
+          "p95_ms": 15.11489199474454,
+          "p99_ms": 18.794595617801,
+          "min_ms": 3.6259170155972242,
+          "max_ms": 77.95654202345759
+        },
+        "latency_queue_wait": {
+          "count": 1485,
+          "mean_ms": 9.62640798771409,
+          "p50_ms": 10.584500036202371,
+          "p90_ms": 11.218866822309792,
+          "p95_ms": 11.40528277028352,
+          "p99_ms": 14.64978809934112,
+          "min_ms": 0.04295795224606991,
+          "max_ms": 84.4646249897778
+        },
+        "throughput": {
+          "duration_sec": 30.019391541951336,
+          "requests": 1485,
+          "requests_per_sec": 49.46802462417502,
+          "errors": 0,
+          "error_rate": 0.0
+        },
+        "model_backend": "onnxruntime-cpu",
+        "model_precision": "fp32"
+      }
+    },
+    {
+      "concurrency": "poisson@100rps",
+      "results": {
+        "latency_e2e": {
+          "count": 2947,
+          "mean_ms": 1577.4617218517142,
+          "p50_ms": 1753.6880830302835,
+          "p90_ms": 3046.125533175658,
+          "p95_ms": 3804.4537874869984,
+          "p99_ms": 4229.85700431047,
+          "min_ms": 8.891250006854534,
+          "max_ms": 4275.980207952671
+        },
+        "latency_inference": {
+          "count": 2947,
+          "mean_ms": 12.809570160777218,
+          "p50_ms": 6.71733298804611,
+          "p90_ms": 13.731825188733643,
+          "p95_ms": 17.440408130642027,
+          "p99_ms": 36.71441334765399,
+          "min_ms": 3.3818749943748116,
+          "max_ms": 3092.9112910525873
+        },
+        "latency_queue_wait": {
+          "count": 2947,
+          "mean_ms": 1443.3737603808786,
+          "p50_ms": 1694.891083985567,
+          "p90_ms": 2669.3594333715737,
+          "p95_ms": 3063.691620610188,
+          "p99_ms": 4039.3484902428463,
+          "min_ms": 0.11879205703735352,
+          "max_ms": 4224.250750034116
+        },
+        "throughput": {
+          "duration_sec": 30.244681667070836,
+          "requests": 2947,
+          "requests_per_sec": 97.43861854590364,
+          "errors": 0,
+          "error_rate": 0.0
+        },
+        "model_backend": "onnxruntime-cpu",
+        "model_precision": "fp32"
+      }
+    },
+    {
+      "concurrency": "poisson@200rps",
+      "results": {
+        "latency_e2e": {
+          "count": 5987,
+          "mean_ms": 1741.755160204322,
+          "p50_ms": 1900.6900410167873,
+          "p90_ms": 1940.324649750255,
+          "p95_ms": 1952.827416837681,
+          "p99_ms": 1983.2221711217426,
+          "min_ms": 28.19366694893688,
+          "max_ms": 2003.7113330326974
+        },
+        "latency_inference": {
+          "count": 5987,
+          "mean_ms": 6.760947618277904,
+          "p50_ms": 6.6683749901130795,
+          "p90_ms": 8.524833526462317,
+          "p95_ms": 9.052045678254217,
+          "p99_ms": 10.45297994511202,
+          "min_ms": 3.403875045478344,
+          "max_ms": 121.6007920447737
+        },
+        "latency_queue_wait": {
+          "count": 5987,
+          "mean_ms": 1730.1128597724194,
+          "p50_ms": 1889.4756670342758,
+          "p90_ms": 1928.778941836208,
+          "p95_ms": 1942.1242203912698,
+          "p99_ms": 1971.0114678298123,
+          "min_ms": 5.733791971579194,
+          "max_ms": 1987.9694590345025
+        },
+        "throughput": {
+          "duration_sec": 44.27522333303932,
+          "requests": 5987,
+          "requests_per_sec": 135.222355739815,
+          "errors": 0,
+          "error_rate": 0.0
+        },
+        "model_backend": "onnxruntime-cpu",
+        "model_precision": "fp32"
+      }
+    }
+  ]
+}
