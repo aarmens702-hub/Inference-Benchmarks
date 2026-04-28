@@ -19,7 +19,15 @@ from pathlib import Path
 
 import yaml
 
-from inferbench.benchmarks.workloads import WorkloadResult, closed_loop, poisson
+import httpx
+
+from inferbench.benchmarks.workloads import (
+    WorkloadResult,
+    cache_repeat,
+    closed_loop,
+    poisson,
+    spike,
+)
 from inferbench.engine.metrics import latency_stats, throughput_stats
 from inferbench.reports.generate_report import write_run_report, write_sweep_report
 
@@ -134,7 +142,98 @@ def _scenario_c(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
     print(f"Results: {run_dir}")
 
 
-_SCENARIOS = {"A": _scenario_a, "B": _scenario_b, "C": _scenario_c}
+def _get_metrics(base_url: str) -> dict | None:
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            r = client.get(f"{base_url.rstrip('/')}/metrics")
+            r.raise_for_status()
+            return r.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+
+
+def _reset_cache_via_restart_hint(base_url: str) -> dict | None:
+    """We don't have a /admin/cache/reset endpoint yet (W6 polish).
+    Return the *current* metrics so the caller can compute deltas instead.
+    """
+    return _get_metrics(base_url)
+
+
+def _scenario_d(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta: dict, config_path: Path) -> None:
+    warmup = args.warmup if args.warmup is not None else float(scenario_cfg.get("warmup_sec", 0))
+    phases = scenario_cfg["phases"]
+
+    pre = _get_metrics(base_url)
+    wl = spike(base_url, phases=phases, warmup_sec=warmup)
+    post = _get_metrics(base_url)
+
+    summary = _summarize(wl)
+    run_meta["workload"] = "spike"
+    run_meta["phases"] = phases
+    run_meta["warmup_sec"] = warmup
+    run_meta["metrics_pre"] = pre
+    run_meta["metrics_post"] = post
+    write_run_report(run_dir, "D", scenario_cfg, summary, run_meta, config_path)
+    _print_run("D", summary)
+    print(f"Results: {run_dir}")
+
+
+def _scenario_e(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta: dict, config_path: Path) -> None:
+    duration = args.duration if args.duration is not None else float(scenario_cfg["duration_sec"])
+    warmup = args.warmup if args.warmup is not None else float(scenario_cfg.get("warmup_sec", 0))
+    rate = float(scenario_cfg["rate_rps"])
+    ratios = scenario_cfg["repeat_ratios"]
+
+    sweep: list[dict] = []
+    backend = precision = ""
+    for ratio in ratios:
+        pre = _get_metrics(base_url)
+        wl = cache_repeat(
+            base_url,
+            rate_rps=rate,
+            duration_sec=duration,
+            repeat_ratio=float(ratio),
+            warmup_sec=warmup,
+        )
+        post = _get_metrics(base_url)
+
+        summary = _summarize(wl)
+        backend = backend or summary["model_backend"]
+        precision = precision or summary["model_precision"]
+
+        observed_ratio = None
+        if pre and post and "cache" in pre and "cache" in post:
+            d_hits = post["cache"]["hits"] - pre["cache"]["hits"]
+            d_total = d_hits + (post["cache"]["misses"] - pre["cache"]["misses"])
+            observed_ratio = d_hits / d_total if d_total else None
+
+        sweep.append({
+            "concurrency": f"repeat={ratio:.2f}",
+            "results": summary,
+            "observed_cache_hit_ratio": observed_ratio,
+        })
+        suffix = f" repeat={ratio:.2f}"
+        if observed_ratio is not None:
+            suffix += f" hits={observed_ratio * 100:.1f}%"
+        _print_run("E", summary, suffix=suffix)
+
+    run_meta["workload"] = "cache_repeat"
+    run_meta["duration_sec"] = duration
+    run_meta["warmup_sec"] = warmup
+    run_meta["rate_rps"] = rate
+    run_meta["backend"] = backend
+    run_meta["precision"] = precision
+    write_sweep_report(run_dir, "E", scenario_cfg, sweep, run_meta, config_path)
+    print(f"Results: {run_dir}")
+
+
+_SCENARIOS = {
+    "A": _scenario_a,
+    "B": _scenario_b,
+    "C": _scenario_c,
+    "D": _scenario_d,
+    "E": _scenario_e,
+}
 
 
 def main() -> None:

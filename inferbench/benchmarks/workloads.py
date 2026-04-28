@@ -118,6 +118,119 @@ def closed_loop(
     return result
 
 
+def spike(
+    base_url: str,
+    phases: list[dict],
+    warmup_sec: float = 0.0,
+    max_inflight: int = 512,
+    texts: list[str] | None = None,
+    seed: int = 42,
+) -> WorkloadResult:
+    """Multi-phase open-loop workload. Each phase is {rate_rps, duration_sec}.
+
+    Used by Scenario D (10 -> 100 -> 10 rps) to stress the queue with a
+    sudden burst and observe recovery behavior.
+    """
+    texts = texts or DEFAULT_TEXTS
+    url = f"{base_url.rstrip('/')}/infer"
+    _warmup(base_url, warmup_sec, texts)
+
+    result = WorkloadResult()
+    lock = threading.Lock()
+    rng = random.Random(seed)
+
+    def submit(text: str) -> None:
+        with httpx.Client(timeout=10.0) as client:
+            outcome = _post_one(client, url, text)
+            if outcome is None:
+                with lock:
+                    result.errors += 1
+            else:
+                lat, inf, qw, backend, precision = outcome
+                with lock:
+                    result.latencies_ms.append(lat)
+                    result.inference_ms.append(inf)
+                    result.queue_wait_ms.append(qw)
+                    result.backend = backend
+                    result.precision = precision
+
+    start = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=max_inflight) as pool:
+        i = 0
+        for phase in phases:
+            rate = float(phase["rate_rps"])
+            phase_end = time.perf_counter() + float(phase["duration_sec"])
+            next_at = time.perf_counter()
+            while next_at < phase_end:
+                now = time.perf_counter()
+                if now < next_at:
+                    time.sleep(next_at - now)
+                pool.submit(submit, texts[i % len(texts)])
+                i += 1
+                next_at += rng.expovariate(rate)
+    result.duration_sec = time.perf_counter() - start
+    return result
+
+
+def cache_repeat(
+    base_url: str,
+    rate_rps: float,
+    duration_sec: float,
+    repeat_ratio: float,
+    max_inflight: int = 256,
+    warmup_sec: float = 0.0,
+    seed: int = 42,
+) -> WorkloadResult:
+    """Open-loop workload with a tunable hot-key probability.
+
+    With probability `repeat_ratio` each request uses a fixed hot key;
+    otherwise it picks a fresh unique input. Used by Scenario E to drive
+    cache hit ratio from 0% to ~80%.
+    """
+    url = f"{base_url.rstrip('/')}/infer"
+    hot_key = "this is a fixed cache-warming input"
+    _warmup(base_url, warmup_sec, [hot_key])
+
+    result = WorkloadResult()
+    lock = threading.Lock()
+    rng = random.Random(seed)
+
+    def pick_text(i: int) -> str:
+        if rng.random() < repeat_ratio:
+            return hot_key
+        return f"unique input number {i} {rng.random():.6f}"
+
+    def submit(text: str) -> None:
+        with httpx.Client(timeout=10.0) as client:
+            outcome = _post_one(client, url, text)
+            if outcome is None:
+                with lock:
+                    result.errors += 1
+            else:
+                lat, inf, qw, backend, precision = outcome
+                with lock:
+                    result.latencies_ms.append(lat)
+                    result.inference_ms.append(inf)
+                    result.queue_wait_ms.append(qw)
+                    result.backend = backend
+                    result.precision = precision
+
+    start = time.perf_counter()
+    end_at = start + duration_sec
+    with ThreadPoolExecutor(max_workers=max_inflight) as pool:
+        i = 0
+        next_at = start
+        while next_at < end_at:
+            now = time.perf_counter()
+            if now < next_at:
+                time.sleep(next_at - now)
+            pool.submit(submit, pick_text(i))
+            i += 1
+            next_at += rng.expovariate(rate_rps)
+    result.duration_sec = time.perf_counter() - start
+    return result
+
+
 def poisson(
     base_url: str,
     rate_rps: float,
