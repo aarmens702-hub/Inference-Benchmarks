@@ -52,7 +52,41 @@ class ModelMetadata:
 _PROVIDERS_BY_BACKEND = {
     "onnxruntime-cpu": ["CPUExecutionProvider"],
     "onnxruntime-cuda": ["CUDAExecutionProvider", "CPUExecutionProvider"],
+    "onnxruntime-coreml": ["CoreMLExecutionProvider", "CPUExecutionProvider"],
+    "onnxruntime-tensorrt": [
+        "TensorrtExecutionProvider",
+        "CUDAExecutionProvider",
+        "CPUExecutionProvider",
+    ],
 }
+
+
+def resolve_providers(requested_backend: str) -> tuple[list[str], str]:
+    """Filter requested execution-provider chain to those actually available.
+
+    Returns (providers_to_use, effective_backend). The effective_backend tag
+    reflects the *first* provider that's actually available so /health and
+    response.model_backend show the truth, not the wish.
+    """
+    if requested_backend not in _PROVIDERS_BY_BACKEND:
+        raise ValueError(f"Unsupported backend: {requested_backend}")
+    available = set(ort.get_available_providers())
+    requested = _PROVIDERS_BY_BACKEND[requested_backend]
+    filtered = [p for p in requested if p in available]
+    if not filtered:
+        raise RuntimeError(
+            f"None of the providers for backend '{requested_backend}' are available "
+            f"on this build of onnxruntime. Requested {requested}, available {sorted(available)}."
+        )
+
+    head_to_backend = {
+        "CUDAExecutionProvider": "onnxruntime-cuda",
+        "CoreMLExecutionProvider": "onnxruntime-coreml",
+        "TensorrtExecutionProvider": "onnxruntime-tensorrt",
+        "CPUExecutionProvider": "onnxruntime-cpu",
+    }
+    effective = head_to_backend.get(filtered[0], requested_backend)
+    return filtered, effective
 
 
 class ModelRunner:
@@ -66,9 +100,9 @@ class ModelRunner:
         max_seq_length: int = 128,
     ) -> None:
         self.model_dir = Path(model_dir)
-        if backend not in _PROVIDERS_BY_BACKEND:
-            raise ValueError(f"Unsupported backend: {backend}")
-        self.backend = backend
+        providers, effective_backend = resolve_providers(backend)
+        self.backend = effective_backend
+        self.requested_backend = backend
         self.max_seq_length = max_seq_length
 
         metadata_path = self.model_dir / "metadata.json"
@@ -76,10 +110,11 @@ class ModelRunner:
         self.metadata = ModelMetadata(
             model_id=meta_raw["model_id"],
             precision=meta_raw["precision"],
-            backend=backend,
+            backend=effective_backend,
             labels={int(k): v for k, v in meta_raw["labels"].items()},
             model_size_bytes=meta_raw["model_size_bytes"],
             max_position_embeddings=meta_raw.get("max_position_embeddings", 512),
+            extra={"providers_used": providers, "requested_backend": backend},
         )
 
         sess_options = ort.SessionOptions()
@@ -91,7 +126,7 @@ class ModelRunner:
         self.session = ort.InferenceSession(
             str(onnx_path),
             sess_options=sess_options,
-            providers=_PROVIDERS_BY_BACKEND[backend],
+            providers=providers,
         )
 
         self.tokenizer = AutoTokenizer.from_pretrained(str(self.model_dir))
