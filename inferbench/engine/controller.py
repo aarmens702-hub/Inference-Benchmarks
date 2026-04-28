@@ -1,24 +1,34 @@
-"""SLO-driven adaptive batching controller.
+"""SLO-driven adaptive batching controller (saturation-aware).
 
 Goal: maximize throughput while keeping observed p95 latency under
 `latency_slo_ms`. The controller wakes every `adjust_interval_sec`,
 reads the batcher's recent per-request latencies, and steps the
-batcher's `max_batch_size` and `max_wait_ms` up or down by one click
-at a time. Mutating one knob per tick (rather than multiplicatively
-rescaling) avoids the oscillation that bigger steps would cause.
+batcher's `max_batch_size` and `max_wait_ms`. Mutating one knob per
+tick (rather than multiplicatively rescaling) avoids oscillation.
 
-Decision rule (mirrors the spec):
+Decision rule:
 
-    Every tick:
-        if recent p95 > slo:
-            shrink (smaller batches, shorter waits) -> protect tail
-        elif recent p95 < 0.7 * slo and queue depth is high:
-            grow (larger batches, longer waits) -> harvest throughput
+    if p95 > slo:
+        if qsize > saturation_qsize_factor * max_batch_size:
+            # Tail latency is queue depth, not batch wait. Smaller
+            # batches make the drain rate worse and the queue
+            # grows faster, so:
+            grow batch (more drain), keep wait
         else:
-            keep settings
+            # Tail latency is from waiting for a batch to fill at
+            # low concurrency:
+            shrink wait, keep batch
+    elif p95 < grow_under_ratio * slo and qsize > max_batch_size / 2:
+        grow batch + grow wait — we have slack, harvest throughput
+    else:
+        hold
 
-`queue depth is high` is operationalized as `qsize > max_batch_size / 2`.
-A no-data tick (no recent latencies sampled) keeps settings unchanged.
+The saturation branch is the W7 follow-up — bench(C-adaptive-v1)
+showed that without it, the controller responds to overload by
+shrinking the very thing (batch size) that was carrying drain
+throughput, which makes the regression worse.
+
+A no-data tick (fewer than min_samples observed) holds settings.
 """
 
 from __future__ import annotations
@@ -49,6 +59,9 @@ class ControllerConfig:
     wait_step_ms: float = 2.0
     # Minimum samples required before any decision is made.
     min_samples: int = 32
+    # Saturation detection: qsize > this factor * max_batch_size
+    # implies queue-depth latency, not batch-wait latency.
+    saturation_qsize_factor: float = 2.0
 
 
 @dataclass
@@ -131,9 +144,20 @@ class AdaptiveBatchController:
 
         action: str
         if p95 > cfg.latency_slo_ms:
-            new_batch = max(cfg.min_batch_size, bcfg.max_batch_size - cfg.batch_step)
-            new_wait = max(cfg.min_wait_ms, bcfg.max_wait_ms - cfg.wait_step_ms)
-            action = "shrink"
+            if qsize > cfg.saturation_qsize_factor * bcfg.max_batch_size:
+                # Saturation — tail latency is queue depth. Larger batches
+                # increase drain throughput; keep wait so we don't lose
+                # the bigger batches we're now harvesting.
+                new_batch = min(cfg.max_batch_size, bcfg.max_batch_size + cfg.batch_step)
+                new_wait = bcfg.max_wait_ms
+                action = "grow-saturation"
+            else:
+                # Batch-wait jitter at low load — shorten the wait so a
+                # solitary request flushes faster. Keep batch in case
+                # load picks up.
+                new_batch = bcfg.max_batch_size
+                new_wait = max(cfg.min_wait_ms, bcfg.max_wait_ms - cfg.wait_step_ms)
+                action = "shrink-wait"
         elif p95 < cfg.grow_under_ratio * cfg.latency_slo_ms and qsize > bcfg.max_batch_size / 2:
             new_batch = min(cfg.max_batch_size, bcfg.max_batch_size + cfg.batch_step)
             new_wait = min(cfg.max_wait_ms, bcfg.max_wait_ms + cfg.wait_step_ms)

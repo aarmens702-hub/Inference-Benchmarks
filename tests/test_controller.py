@@ -71,17 +71,31 @@ def test_no_data_tick_when_under_min_samples():
     assert decision.max_batch_size == 8
 
 
-def test_shrinks_when_p95_exceeds_slo():
-    # latencies cluster at 200ms — well over the 100ms slo.
-    batcher = _seed_batcher(latencies=[200.0] * 100)
+def test_shrink_wait_when_slo_exceeded_but_queue_empty():
+    # latencies > SLO, qsize low -> tail is batch-wait, not queue depth.
+    batcher = _seed_batcher(latencies=[200.0] * 100, qsize_target=0)
     ctrl = AdaptiveBatchController(
         batcher,
         ControllerConfig(latency_slo_ms=100.0, batch_step=2, wait_step_ms=2.0),
     )
     decision = ctrl.step_once()
-    assert decision.action == "shrink"
-    assert decision.max_batch_size == 6  # was 8, stepped down 2
-    assert decision.max_wait_ms == 8.0
+    assert decision.action == "shrink-wait"
+    assert decision.max_batch_size == 8  # batch unchanged
+    assert decision.max_wait_ms == 8.0  # wait stepped down
+
+
+def test_grow_saturation_when_slo_exceeded_and_queue_deep():
+    # latencies > SLO, qsize >> max_batch_size -> drain bottleneck.
+    # max_batch_size=8, qsize=24 (= 3x batch_size, > saturation_factor*batch).
+    batcher = _seed_batcher(latencies=[200.0] * 100, qsize_target=24)
+    ctrl = AdaptiveBatchController(
+        batcher,
+        ControllerConfig(latency_slo_ms=100.0, saturation_qsize_factor=2.0),
+    )
+    decision = ctrl.step_once()
+    assert decision.action == "grow-saturation"
+    assert decision.max_batch_size == 10  # batch grew
+    assert decision.max_wait_ms == 10.0  # wait unchanged
 
 
 def test_grows_when_under_slo_and_queue_full():
@@ -104,17 +118,18 @@ def test_holds_when_under_slo_but_queue_empty():
     assert decision.max_wait_ms == 10.0
 
 
-def test_clamps_at_min_batch_size():
-    batcher = _seed_batcher(latencies=[500.0] * 100)
-    batcher.config.max_batch_size = 1  # already at floor
-    batcher.config.max_wait_ms = 1.0
+def test_clamps_at_min_wait_ms():
+    # high latency + empty queue -> shrink_wait branch; floor clamp must hold.
+    batcher = _seed_batcher(latencies=[500.0] * 100, qsize_target=0)
+    batcher.config.max_batch_size = 8
+    batcher.config.max_wait_ms = 1.0  # already at floor
     ctrl = AdaptiveBatchController(
         batcher,
-        ControllerConfig(latency_slo_ms=100.0, min_batch_size=1, min_wait_ms=1.0),
+        ControllerConfig(latency_slo_ms=100.0, min_wait_ms=1.0),
     )
     decision = ctrl.step_once()
-    assert decision.max_batch_size == 1
     assert decision.max_wait_ms == 1.0
+    assert decision.max_batch_size == 8
 
 
 def test_clamps_at_max_batch_size():
@@ -148,17 +163,17 @@ def test_percentile_helper():
 
 
 def test_recovery_after_burst():
-    """Latency briefly exceeds SLO (1 shrink), then drops -> next tick holds.
-
-    This is the failure mode we explicitly want to avoid: yo-yoing
-    between shrink/grow on noisy windows.
+    """Tail spike + low queue -> shrink-wait. Then latency normalises and
+    queue empties -> hold. We don't want a yo-yo back to grow.
     """
-    batcher = _seed_batcher(latencies=[200.0] * 100, qsize_target=4)
+    batcher = _seed_batcher(latencies=[200.0] * 100, qsize_target=2)
+    # qsize=2 < saturation_factor*max_batch_size (=16) -> shrink-wait branch.
     ctrl = AdaptiveBatchController(batcher, ControllerConfig(latency_slo_ms=100.0))
 
-    d1 = ctrl.step_once()  # shrink
-    assert d1.action == "shrink"
-    assert batcher.config.max_batch_size == 6
+    d1 = ctrl.step_once()
+    assert d1.action == "shrink-wait"
+    assert batcher.config.max_wait_ms == 8.0
+    assert batcher.config.max_batch_size == 8
 
     # Latency drops back to ok range, queue empties.
     batcher._recent_latencies = deque([60.0] * 100, maxlen=2048)
@@ -167,4 +182,4 @@ def test_recovery_after_burst():
     d2 = ctrl.step_once()
     # 60ms < 100ms SLO but qsize=0 < max_batch_size/2 -> hold, not grow.
     assert d2.action == "hold"
-    assert batcher.config.max_batch_size == 6  # didn't bounce back up
+    assert batcher.config.max_wait_ms == 8.0  # didn't bounce back up
