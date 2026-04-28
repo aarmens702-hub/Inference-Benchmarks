@@ -14,6 +14,12 @@ httpx>=0.27,<1.0
 # Quantization (W5) — pulled in via onnxruntime-tools
 onnx>=1.15,<2.0
 
+# HF model export + tokenization for DistilBERT-SST2.
+# torch is needed only at export time; runtime path is pure ONNX Runtime.
+transformers>=4.40,<5.0
+optimum[onnxruntime]>=1.20,<2.0
+torch>=2.2,<3.0
+
 # Optional GPU backend (W8) — install separately if GPU available
 # onnxruntime-gpu>=1.17,<2.0
 
