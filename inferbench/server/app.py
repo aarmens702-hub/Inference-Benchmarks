@@ -16,6 +16,7 @@ import yaml
 from fastapi import FastAPI
 
 from inferbench.engine.batcher import BatcherConfig, DynamicBatcher
+from inferbench.engine.cache import PredictionCache
 from inferbench.engine.model_runner import ModelRunner
 from inferbench.server.routes import register_routes
 
@@ -31,6 +32,7 @@ async def _lifespan(app: FastAPI):
     model_cfg = config["model"]
     batching_cfg = config.get("batching", {}) or {}
     queue_cfg = config.get("queue", {}) or {}
+    cache_cfg = config.get("cache", {}) or {}
 
     runner = ModelRunner(
         model_dir=model_cfg["path"],
@@ -50,8 +52,14 @@ async def _lifespan(app: FastAPI):
         )
         await batcher.start()
 
+    cache: PredictionCache | None = None
+    if cache_cfg.get("enabled", False):
+        cache = PredictionCache(capacity=int(cache_cfg.get("max_entries", 4096)))
+
     app.state.runner = runner
     app.state.batcher = batcher
+    app.state.cache = cache
+    app.state.request_timeout_ms = float(queue_cfg.get("request_timeout_ms", 5000))
     app.state.config = config
 
     try:

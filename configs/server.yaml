@@ -22,7 +22,7 @@ queue:
   request_timeout_ms: 5000
 
 cache:
-  enabled: false            # toggled on in W4
+  enabled: true             # W4: LRU prediction cache on by default
   max_entries: 4096
 
 controller:

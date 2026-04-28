@@ -1,8 +1,9 @@
 """Async request queue used by the dynamic batcher.
 
-W3 wraps asyncio.Queue with a typed put/get and a QueueOverflowError.
-W4 will add bounded backpressure (HTTP 429) and per-request timeouts;
-keeping the surface area small now means the batcher won't change.
+W3: thin asyncio.Queue wrapper with a typed put/get and a
+QueueOverflowError raised on overflow. W4: bounds the queue
+(max_size > 0) so put_nowait raises immediately when full — the route
+maps that to HTTP 429 instead of queueing unbounded latency.
 """
 
 from __future__ import annotations

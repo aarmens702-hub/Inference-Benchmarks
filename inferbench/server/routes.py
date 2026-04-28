@@ -2,8 +2,14 @@
 
 If a DynamicBatcher is registered on app.state, /infer submits each
 input through the batcher (one queue item per text). Otherwise it
-calls ModelRunner.run directly (W1 fast path, also useful for the
-no-batching baseline).
+calls ModelRunner.run directly.
+
+W4 adds three production concerns at the route layer:
+
+- Cache lookup (cache_hit responses skip the queue entirely).
+- 429 Too Many Requests when the bounded queue rejects an item.
+- 504 Gateway Timeout when a request waits longer than
+  request_timeout_ms.
 """
 
 from __future__ import annotations
@@ -12,9 +18,11 @@ import asyncio
 import time
 import uuid
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 
-from inferbench.engine.batcher import DynamicBatcher
+from inferbench.engine.batcher import BatchResult, DynamicBatcher
+from inferbench.engine.cache import PredictionCache, cache_key
+from inferbench.engine.request_queue import QueueOverflowError
 from inferbench.server.schemas import (
     HealthResponse,
     InferRequest,
@@ -38,36 +46,121 @@ def register_routes(app: FastAPI) -> None:
     async def infer(payload: InferRequest, request: Request) -> InferResponse:
         runner = request.app.state.runner
         batcher: DynamicBatcher | None = request.app.state.batcher
-        request_id = payload.request_id or str(uuid.uuid4())
+        cache: PredictionCache | None = request.app.state.cache
+        request_timeout_ms: float = request.app.state.request_timeout_ms
 
+        request_id = payload.request_id or str(uuid.uuid4())
         t_start = time.perf_counter()
 
-        if batcher is not None:
-            results = await asyncio.gather(*[batcher.submit(t) for t in payload.inputs])
-            predictions = [PredictionItem(label=r.prediction.label, score=r.prediction.score) for r in results]
-            # When a single client request fans out to multiple queue items,
-            # report the worst per-item queue wait and the (shared) inference
-            # time of the batch the first item landed in.
-            batch_size = results[0].batch_size if results else 0
-            queue_wait_ms = max(r.queue_wait_ms for r in results) if results else 0.0
-            inference_ms = results[0].inference_ms if results else 0.0
+        # Reserve a slot per input (preserves request ordering).
+        n = len(payload.inputs)
+        predictions: list[PredictionItem | None] = [None] * n
+        miss_indices: list[int] = []
+        miss_texts: list[str] = []
+        cache_hits_count = 0
+
+        if cache is not None:
+            for i, text in enumerate(payload.inputs):
+                key = cache_key(runner.metadata.model_id, runner.metadata.precision, text)
+                cached = cache.get(key)
+                if cached is not None:
+                    predictions[i] = PredictionItem(label=cached.label, score=cached.score)
+                    cache_hits_count += 1
+                else:
+                    miss_indices.append(i)
+                    miss_texts.append(text)
         else:
-            run_result = runner.run(payload.inputs)
-            predictions = [PredictionItem(label=p.label, score=p.score) for p in run_result.predictions]
-            batch_size = run_result.batch_size
-            queue_wait_ms = 0.0
-            inference_ms = run_result.inference_ms
+            miss_indices = list(range(n))
+            miss_texts = list(payload.inputs)
+
+        batch_size = 0
+        queue_wait_ms = 0.0
+        inference_ms = 0.0
+
+        if miss_texts:
+            try:
+                batch_results = await _submit_misses(
+                    batcher=batcher,
+                    runner=runner,
+                    miss_texts=miss_texts,
+                    timeout_sec=request_timeout_ms / 1000.0,
+                )
+            except QueueOverflowError:
+                raise HTTPException(status_code=429, detail="queue full")
+            except asyncio.TimeoutError:
+                raise HTTPException(status_code=504, detail="request timed out")
+
+            batch_size = batch_results[0].batch_size if batch_results else 0
+            queue_wait_ms = max((r.queue_wait_ms for r in batch_results), default=0.0)
+            inference_ms = batch_results[0].inference_ms if batch_results else 0.0
+
+            for j, idx in enumerate(miss_indices):
+                br = batch_results[j]
+                predictions[idx] = PredictionItem(label=br.prediction.label, score=br.prediction.score)
+                if cache is not None:
+                    key = cache_key(runner.metadata.model_id, runner.metadata.precision, miss_texts[j])
+                    cache.put(key, br.prediction)
 
         latency_ms = (time.perf_counter() - t_start) * 1000.0
 
         return InferResponse(
             request_id=request_id,
-            predictions=predictions,
+            predictions=predictions,  # type: ignore[arg-type]
             latency_ms=latency_ms,
             queue_wait_ms=queue_wait_ms,
             inference_ms=inference_ms,
-            batch_size=batch_size,
-            cache_hit=False,
+            batch_size=batch_size if miss_texts else 0,
+            cache_hit=(cache_hits_count == n and n > 0),
             model_backend=runner.metadata.backend,
             model_precision=runner.metadata.precision,
         )
+
+    @app.get("/metrics")
+    def metrics(request: Request) -> dict:
+        cache: PredictionCache | None = request.app.state.cache
+        batcher: DynamicBatcher | None = request.app.state.batcher
+        out: dict = {}
+        if cache is not None:
+            stats = cache.stats()
+            out["cache"] = {
+                "hits": stats.hits,
+                "misses": stats.misses,
+                "hit_ratio": stats.hit_ratio,
+                "size": stats.size,
+                "capacity": stats.capacity,
+            }
+        if batcher is not None:
+            out["batcher"] = {
+                "queue_size": batcher.qsize(),
+                "avg_batch_size": batcher.avg_batch_size,
+            }
+        return out
+
+
+async def _submit_misses(
+    batcher: DynamicBatcher | None,
+    runner,
+    miss_texts: list[str],
+    timeout_sec: float,
+) -> list[BatchResult]:
+    """Run the miss texts through the batcher (or directly through runner).
+
+    Raises QueueOverflowError if the queue is full or asyncio.TimeoutError
+    if any single submission exceeds timeout_sec.
+    """
+    if batcher is not None:
+        async def _one(t: str) -> BatchResult:
+            return await asyncio.wait_for(batcher.submit(t), timeout=timeout_sec)
+
+        return await asyncio.gather(*[_one(t) for t in miss_texts])
+
+    run_result = runner.run(miss_texts)
+    return [
+        BatchResult(
+            prediction=p,
+            batch_size=run_result.batch_size,
+            queue_wait_ms=0.0,
+            inference_ms=run_result.inference_ms,
+        )
+        for p in run_result.predictions
+    ]
