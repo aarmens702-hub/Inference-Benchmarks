@@ -123,17 +123,16 @@ def spike(
     phases: list[dict],
     warmup_sec: float = 0.0,
     max_inflight: int = 512,
-    texts: list[str] | None = None,
     seed: int = 42,
 ) -> WorkloadResult:
     """Multi-phase open-loop workload. Each phase is {rate_rps, duration_sec}.
 
     Used by Scenario D (10 -> 100 -> 10 rps) to stress the queue with a
-    sudden burst and observe recovery behavior.
+    sudden burst and observe recovery behavior. Generates unique inputs
+    on every request so cache hits don't mask queue pressure.
     """
-    texts = texts or DEFAULT_TEXTS
     url = f"{base_url.rstrip('/')}/infer"
-    _warmup(base_url, warmup_sec, texts)
+    _warmup(base_url, warmup_sec, DEFAULT_TEXTS)
 
     result = WorkloadResult()
     lock = threading.Lock()
@@ -165,7 +164,7 @@ def spike(
                 now = time.perf_counter()
                 if now < next_at:
                     time.sleep(next_at - now)
-                pool.submit(submit, texts[i % len(texts)])
+                pool.submit(submit, f"spike unique input {i} {rng.random():.6f}")
                 i += 1
                 next_at += rng.expovariate(rate)
     result.duration_sec = time.perf_counter() - start

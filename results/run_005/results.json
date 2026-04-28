@@ -1,0 +1,97 @@
+{
+  "meta": {
+    "scenario": "D",
+    "started_at": "2026-04-28T22:23:48.701626+00:00",
+    "base_url": "http://127.0.0.1:8000",
+    "system": {
+      "hostname": "Mac-2.lan",
+      "platform": "macOS-15.5-arm64-arm-64bit",
+      "python_version": "3.11.14",
+      "machine": "arm64",
+      "cpu_count": 8
+    },
+    "workload": "spike",
+    "phases": [
+      {
+        "rate_rps": 10,
+        "duration_sec": 30
+      },
+      {
+        "rate_rps": 100,
+        "duration_sec": 30
+      },
+      {
+        "rate_rps": 10,
+        "duration_sec": 30
+      }
+    ],
+    "warmup_sec": 0.0,
+    "metrics_pre": {
+      "cache": {
+        "hits": 0,
+        "misses": 0,
+        "hit_ratio": 0.0,
+        "size": 0,
+        "capacity": 4096
+      },
+      "batcher": {
+        "queue_size": 0,
+        "avg_batch_size": 0.0
+      }
+    },
+    "metrics_post": {
+      "cache": {
+        "hits": 0,
+        "misses": 3600,
+        "hit_ratio": 0.0,
+        "size": 3599,
+        "capacity": 4096
+      },
+      "batcher": {
+        "queue_size": 0,
+        "avg_batch_size": 1.3407821229050279
+      }
+    }
+  },
+  "results": {
+    "latency_e2e": {
+      "count": 3599,
+      "mean_ms": 400.6609375847433,
+      "p50_ms": 28.713291976600885,
+      "p90_ms": 1602.4297918658704,
+      "p95_ms": 2258.712603827007,
+      "p99_ms": 2432.1173042966984,
+      "min_ms": 9.76279191672802,
+      "max_ms": 2615.2345419395715
+    },
+    "latency_inference": {
+      "count": 3599,
+      "mean_ms": 11.265267327916426,
+      "p50_ms": 8.446249994449317,
+      "p90_ms": 18.046249984763563,
+      "p95_ms": 22.49712508637458,
+      "p99_ms": 32.84470899961889,
+      "min_ms": 4.199916031211615,
+      "max_ms": 1457.535249995999
+    },
+    "latency_queue_wait": {
+      "count": 3599,
+      "mean_ms": 380.406362403282,
+      "p50_ms": 11.146291974000633,
+      "p90_ms": 1585.8114083996043,
+      "p95_ms": 2184.49515477987,
+      "p99_ms": 2373.265591703821,
+      "min_ms": 0.1141249667853117,
+      "max_ms": 2540.836540982127
+    },
+    "throughput": {
+      "duration_sec": 89.92584454198368,
+      "requests": 3599,
+      "requests_per_sec": 40.02186488579193,
+      "errors": 1,
+      "error_rate": 0.0002778549597110308
+    },
+    "model_backend": "onnxruntime-cpu",
+    "model_precision": "fp32"
+  }
+}
