@@ -58,3 +58,10 @@ class RequestQueue(Generic[T]):
             return await asyncio.wait_for(self._queue.get(), timeout=timeout_sec)
         except asyncio.TimeoutError:
             return None
+
+    def get_nowait(self) -> T | None:
+        """Return an item if one is available, else None. Never blocks."""
+        try:
+            return self._queue.get_nowait()
+        except asyncio.QueueEmpty:
+            return None

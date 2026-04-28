@@ -117,6 +117,15 @@ class DynamicBatcher:
         while len(batch) < self.config.max_batch_size:
             remaining = deadline - time.perf_counter()
             if remaining <= 0:
+                # Deadline elapsed (typical when the queue was deep when
+                # we pulled `first`). Don't *wait* for more, but drain any
+                # items already sitting in the queue — they cost nothing
+                # and recover batch formation under sustained load.
+                while len(batch) < self.config.max_batch_size:
+                    item = self._queue.get_nowait()
+                    if item is None:
+                        break
+                    batch.append(item)
                 break
             item = await self._queue.get_with_timeout(remaining)
             if item is None:
