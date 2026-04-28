@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual envs
+.venv/
+venv/
+env/
+.python-version
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Models (large binaries — exported by scripts, not committed)
+models/cache/
+*.onnx
+!models/.gitkeep
+
+# Benchmark scratch (only commit results/run_NNN/ and results/reference/)
+results/scratch/
+
+# Secrets / env
+.env
+.env.local
+
+# k6 binary outputs
+k6-results.json

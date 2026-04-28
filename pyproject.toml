@@ -1,0 +1,24 @@
+[project]
+name = "inferbench"
+version = "0.1.0"
+description = "Local inference-serving benchmark framework: dynamic batching, quantization, caching, adaptive batching, and p50/p95/p99 reporting on ONNX Runtime."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Aarmen Sidhu" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = []
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["inferbench*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
