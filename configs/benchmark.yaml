@@ -1,0 +1,55 @@
+# InferBench benchmark configuration.
+# Loaded by inferbench.benchmarks.run_benchmark.
+
+run:
+  output_dir: results/        # actual run goes to results/run_<NNN>/
+  seed: 42
+
+target:
+  base_url: http://127.0.0.1:8000
+  endpoint: /infer
+
+# Scenario IDs match README §"Benchmark Scenarios".
+# Run one scenario per invocation: `python -m inferbench.benchmarks.run_benchmark --scenario A`.
+scenarios:
+  A:
+    name: single-request-baseline
+    workload: closed_loop
+    concurrency: 1
+    duration_sec: 30
+    warmup_sec: 5
+
+  B:
+    name: fixed-concurrency-sweep
+    workload: closed_loop
+    concurrency: [1, 4, 8, 16, 32, 64]
+    duration_sec: 60
+    warmup_sec: 5
+
+  C:
+    name: poisson-arrivals
+    workload: open_loop_poisson
+    rate_rps: [50, 100, 200]
+    duration_sec: 60
+    warmup_sec: 5
+
+  D:
+    name: spike-test
+    workload: spike
+    phases:
+      - { rate_rps: 10, duration_sec: 30 }
+      - { rate_rps: 100, duration_sec: 30 }
+      - { rate_rps: 10, duration_sec: 30 }
+
+  E:
+    name: cache-heavy
+    workload: cache_repeat
+    repeat_ratios: [0.0, 0.2, 0.5, 0.8]
+    rate_rps: 100
+    duration_sec: 60
+
+  F:
+    name: cold-start
+    workload: cold_start
+    requests: 1
+    repeat_warm: 100

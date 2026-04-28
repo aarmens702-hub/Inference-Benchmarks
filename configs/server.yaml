@@ -1,0 +1,33 @@
+# InferBench server configuration.
+# Loaded by inferbench.server.app at startup.
+
+server:
+  host: 0.0.0.0
+  port: 8000
+  log_level: info
+
+model:
+  name: distilbert-sst2
+  path: models/distilbert-sst2-fp32.onnx
+  precision: fp32           # fp32 | int8-dynamic | int8-static
+  backend: onnxruntime-cpu  # onnxruntime-cpu | onnxruntime-cuda
+
+batching:
+  enabled: false            # toggled on starting in W3
+  max_batch_size: 16
+  max_wait_ms: 10
+
+queue:
+  max_size: 1024            # backpressure threshold (HTTP 429)
+  request_timeout_ms: 5000
+
+cache:
+  enabled: false            # toggled on in W4
+  max_entries: 4096
+
+controller:
+  enabled: false            # toggled on in W7
+  latency_slo_ms: 100
+  min_batch_size: 1
+  max_batch_size: 32
+  adjust_interval_sec: 5
