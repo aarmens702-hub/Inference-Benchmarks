@@ -1,0 +1,21 @@
+# Runtime
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.27,<1.0
+pydantic>=2.6,<3.0
+onnxruntime>=1.17,<2.0
+numpy>=1.26,<3.0
+pyyaml>=6.0,<7.0
+psutil>=5.9,<7.0
+
+# Benchmarking + reports
+matplotlib>=3.8,<4.0
+httpx>=0.27,<1.0
+
+# Quantization (W5) — pulled in via onnxruntime-tools
+onnx>=1.15,<2.0
+
+# Optional GPU backend (W8) — install separately if GPU available
+# onnxruntime-gpu>=1.17,<2.0
+
+# Optional metrics endpoint
+# prometheus-client>=0.20,<1.0
