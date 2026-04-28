@@ -39,7 +39,10 @@ async def _lifespan(app: FastAPI):
         model_dir=model_cfg["path"],
         backend=model_cfg["backend"],
     )
-    runner.warmup(n=3)
+    # Scenario F (cold-start) sets this env var so the very first /infer
+    # call observes the unwarmed model — what new pods see in production.
+    if os.environ.get("INFERBENCH_SKIP_WARMUP") != "1":
+        runner.warmup(n=3)
 
     batcher: DynamicBatcher | None = None
     if batching_cfg.get("enabled", False):

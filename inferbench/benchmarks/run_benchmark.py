@@ -15,6 +15,7 @@ import json
 import os
 import platform
 import socket
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -273,12 +274,115 @@ def _scenario_e(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
     print(f"Results: {run_dir}")
 
 
+def _scenario_f(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta: dict, config_path: Path) -> None:
+    """Cold-start scenario: spawn a fresh server with warmup disabled,
+    measure first /infer (cold) and the next N (warmed)."""
+    import subprocess
+    import sys
+
+    n_warm = int(scenario_cfg.get("repeat_warm", 100))
+    bind_host = "127.0.0.1"
+    bind_port = 8765  # avoid collision with the user's already-running 8000
+
+    env = {**os.environ, "INFERBENCH_SKIP_WARMUP": "1"}
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "inferbench.server.app:app",
+         "--host", bind_host, "--port", str(bind_port), "--log-level", "warning"],
+        env=env,
+    )
+    cold_url = f"http://{bind_host}:{bind_port}"
+
+    try:
+        # Wait for /health to come up.
+        deadline = time.perf_counter() + 30.0
+        ready = False
+        with httpx.Client(timeout=2.0) as client:
+            while time.perf_counter() < deadline:
+                try:
+                    r = client.get(f"{cold_url}/health")
+                    if r.status_code == 200:
+                        ready = True
+                        break
+                except httpx.HTTPError:
+                    pass
+                time.sleep(0.2)
+        if not ready:
+            raise RuntimeError("cold-start server never became healthy")
+
+        cold_ms = None
+        warm_ms: list[float] = []
+        with httpx.Client(timeout=30.0) as client:
+            t0 = time.perf_counter()
+            r = client.post(f"{cold_url}/infer", json={"inputs": ["cold start request"]})
+            r.raise_for_status()
+            cold_ms = (time.perf_counter() - t0) * 1000.0
+
+            for i in range(n_warm):
+                t = time.perf_counter()
+                rr = client.post(f"{cold_url}/infer", json={"inputs": [f"warm {i}"]})
+                rr.raise_for_status()
+                warm_ms.append((time.perf_counter() - t) * 1000.0)
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+    warm_stats = latency_stats(warm_ms)
+    speedup = cold_ms / warm_stats.p50_ms if warm_stats.p50_ms else float("inf")
+    summary = {
+        "cold_ms": cold_ms,
+        "warm_count": len(warm_ms),
+        "warm_p50_ms": warm_stats.p50_ms,
+        "warm_p95_ms": warm_stats.p95_ms,
+        "warm_p99_ms": warm_stats.p99_ms,
+        "warm_mean_ms": warm_stats.mean_ms,
+        "cold_to_warm_p50_ratio": speedup,
+    }
+    run_meta["workload"] = "cold_start"
+    run_meta["bind"] = f"{bind_host}:{bind_port}"
+    run_meta["repeat_warm"] = n_warm
+
+    payload = {"meta": run_meta, "results": summary, "raw_warm_ms": warm_ms}
+    (run_dir / "results.json").write_text(json.dumps(payload, indent=2))
+    config_text = config_path.read_text()
+    (run_dir / "config.snapshot.yaml").write_text(config_text)
+    md = (
+        f"# Benchmark Run: scenario F\n\n"
+        f"**Scenario**: cold-start  \n"
+        f"**Started**: {run_meta['started_at']}  \n"
+        f"\n"
+        f"## Cold vs warm\n\n"
+        f"| metric           | value     |\n"
+        f"|------------------|----------:|\n"
+        f"| cold (1 request) | {cold_ms:>7.2f} ms |\n"
+        f"| warm p50         | {warm_stats.p50_ms:>7.2f} ms |\n"
+        f"| warm p95         | {warm_stats.p95_ms:>7.2f} ms |\n"
+        f"| warm p99         | {warm_stats.p99_ms:>7.2f} ms |\n"
+        f"| warm mean        | {warm_stats.mean_ms:>7.2f} ms |\n"
+        f"| cold / warm-p50  | {speedup:>7.2f} x |\n"
+        f"| warm samples     | {len(warm_ms):>9} |\n"
+    )
+    (run_dir / "summary.md").write_text(md)
+    (run_dir / "raw_latencies.json").write_text(json.dumps(
+        {"scenario": "F", "e2e_ms": warm_ms, "cold_ms": cold_ms}
+    ))
+    write_run_charts(run_dir)
+    print(
+        f"bench(F): cold={cold_ms:.2f}ms warm_p50={warm_stats.p50_ms:.2f}ms "
+        f"warm_p99={warm_stats.p99_ms:.2f}ms ratio={speedup:.1f}x"
+    )
+    print(f"Results: {run_dir}")
+
+
 _SCENARIOS = {
     "A": _scenario_a,
     "B": _scenario_b,
     "C": _scenario_c,
     "D": _scenario_d,
     "E": _scenario_e,
+    "F": _scenario_f,
 }
 
 
