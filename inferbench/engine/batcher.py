@@ -51,6 +51,7 @@ class DynamicBatcher:
         self._batches_processed = 0
         self._items_processed = 0
         self._batch_size_sum = 0
+        self._batch_size_histogram: dict[int, int] = {}
 
     async def start(self) -> None:
         if self._task is not None:
@@ -77,6 +78,10 @@ class DynamicBatcher:
         if self._batches_processed == 0:
             return 0.0
         return self._batch_size_sum / self._batches_processed
+
+    def batch_size_histogram(self) -> dict[int, int]:
+        """Snapshot of batch_size -> count of batches processed at that size."""
+        return dict(self._batch_size_histogram)
 
     async def submit(self, text: str) -> BatchResult:
         loop = asyncio.get_running_loop()
@@ -124,6 +129,7 @@ class DynamicBatcher:
         self._batches_processed += 1
         self._items_processed += len(batch)
         self._batch_size_sum += len(batch)
+        self._batch_size_histogram[len(batch)] = self._batch_size_histogram.get(len(batch), 0) + 1
 
         for i, req in enumerate(batch):
             queue_wait_ms = (inference_start - req.submitted_at) * 1000.0

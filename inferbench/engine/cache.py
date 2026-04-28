@@ -79,3 +79,14 @@ class PredictionCache:
                 size=len(self._store),
                 capacity=self._capacity,
             )
+
+    def reset(self) -> None:
+        """Drop all entries and zero the hit/miss counters.
+
+        Used by the benchmark harness between sub-runs (Scenario E)
+        to make per-ratio cache-hit measurements isolated.
+        """
+        with self._lock:
+            self._store.clear()
+            self._hits = 0
+            self._misses = 0

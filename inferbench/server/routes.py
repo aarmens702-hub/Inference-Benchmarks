@@ -133,8 +133,17 @@ def register_routes(app: FastAPI) -> None:
             out["batcher"] = {
                 "queue_size": batcher.qsize(),
                 "avg_batch_size": batcher.avg_batch_size,
+                "batch_size_histogram": {str(k): v for k, v in batcher.batch_size_histogram().items()},
             }
         return out
+
+    @app.post("/admin/cache/reset")
+    def admin_cache_reset(request: Request) -> dict:
+        cache: PredictionCache | None = request.app.state.cache
+        if cache is None:
+            raise HTTPException(status_code=404, detail="cache not enabled")
+        cache.reset()
+        return {"status": "ok", "size": 0}
 
 
 async def _submit_misses(

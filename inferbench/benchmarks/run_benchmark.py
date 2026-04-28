@@ -187,11 +187,13 @@ def _get_metrics(base_url: str) -> dict | None:
         return None
 
 
-def _reset_cache_via_restart_hint(base_url: str) -> dict | None:
-    """We don't have a /admin/cache/reset endpoint yet (W6 polish).
-    Return the *current* metrics so the caller can compute deltas instead.
-    """
-    return _get_metrics(base_url)
+def _reset_cache(base_url: str) -> bool:
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            r = client.post(f"{base_url.rstrip('/')}/admin/cache/reset")
+            return r.status_code == 200
+    except httpx.HTTPError:
+        return False
 
 
 def _scenario_d(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta: dict, config_path: Path) -> None:
@@ -225,6 +227,9 @@ def _scenario_e(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
     raw: list[tuple[str, WorkloadResult]] = []
     backend = precision = ""
     for ratio in ratios:
+        # W6: reset cache before each sub-run so the observed hit ratio
+        # reflects only this ratio's traffic, not stale entries.
+        _reset_cache(base_url)
         pre = _get_metrics(base_url)
         wl = cache_repeat(
             base_url,
