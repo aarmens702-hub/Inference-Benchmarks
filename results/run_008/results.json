@@ -1,0 +1,58 @@
+{
+  "meta": {
+    "scenario": "A",
+    "started_at": "2026-04-28T22:57:48.274074+00:00",
+    "base_url": "http://127.0.0.1:8000",
+    "system": {
+      "hostname": "Mac-2.lan",
+      "platform": "macOS-15.5-arm64-arm-64bit",
+      "python_version": "3.11.14",
+      "machine": "arm64",
+      "cpu_count": 8
+    },
+    "workload": "closed_loop(c=1)",
+    "duration_sec": 30.0,
+    "warmup_sec": 5.0
+  },
+  "results": {
+    "latency_e2e": {
+      "count": 2070,
+      "mean_ms": 14.488129100001952,
+      "p50_ms": 14.59483295911923,
+      "p90_ms": 15.342121385037899,
+      "p95_ms": 15.572421200340614,
+      "p99_ms": 16.07098722597584,
+      "min_ms": 12.077583000063896,
+      "max_ms": 29.405000037513673
+    },
+    "latency_inference": {
+      "count": 2070,
+      "mean_ms": 1.7810051518960313,
+      "p50_ms": 1.7207710188813508,
+      "p90_ms": 2.269991405773908,
+      "p95_ms": 2.5195564492605627,
+      "p99_ms": 2.877172938315198,
+      "min_ms": 1.1350420536473393,
+      "max_ms": 9.503124980255961
+    },
+    "latency_queue_wait": {
+      "count": 2070,
+      "mean_ms": 11.795578421777392,
+      "p50_ms": 12.10812502540648,
+      "p90_ms": 12.130092282313854,
+      "p95_ms": 12.14344376930967,
+      "p99_ms": 12.1782680391334,
+      "min_ms": 9.556250064633787,
+      "max_ms": 12.66041595954448
+    },
+    "throughput": {
+      "duration_sec": 30.00247670803219,
+      "requests": 2070,
+      "requests_per_sec": 68.99430404176681,
+      "errors": 0,
+      "error_rate": 0.0
+    },
+    "model_backend": "onnxruntime-cpu",
+    "model_precision": "int8-dynamic"
+  }
+}
