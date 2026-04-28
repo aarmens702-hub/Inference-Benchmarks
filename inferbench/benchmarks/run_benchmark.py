@@ -11,6 +11,7 @@ Scenarios A and B are wired in W2; C-F land in later weeks.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import platform
 import socket
@@ -30,6 +31,7 @@ from inferbench.benchmarks.workloads import (
 )
 from inferbench.engine.metrics import latency_stats, throughput_stats
 from inferbench.reports.generate_report import write_run_report, write_sweep_report
+from inferbench.reports.plot_results import write_run_charts, write_sweep_charts
 
 
 def _next_run_dir(output_root: Path) -> Path:
@@ -52,6 +54,29 @@ def _system_info() -> dict:
         "machine": platform.machine(),
         "cpu_count": os.cpu_count(),
     }
+
+
+def _save_raw_samples(run_dir: Path, scenario_id: str, workloads: list[tuple[str, WorkloadResult]]) -> None:
+    """Persist raw sample arrays so plot_results can build CDFs.
+
+    For sweeps, concatenates all sub-runs (good enough for an aggregate
+    CDF — per-config CDFs would need separate dump files; deferred until
+    we want them).
+    """
+    e2e: list[float] = []
+    inf: list[float] = []
+    qw: list[float] = []
+    for _label, w in workloads:
+        e2e.extend(w.latencies_ms)
+        inf.extend(w.inference_ms)
+        qw.extend(w.queue_wait_ms)
+    payload = {
+        "scenario": scenario_id,
+        "e2e_ms": e2e,
+        "inference_ms": inf,
+        "queue_wait_ms": qw,
+    }
+    (run_dir / "raw_latencies.json").write_text(json.dumps(payload))
 
 
 def _summarize(workload: WorkloadResult) -> dict:
@@ -90,6 +115,8 @@ def _scenario_a(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
     run_meta["duration_sec"] = duration
     run_meta["warmup_sec"] = warmup
     write_run_report(run_dir, "A", scenario_cfg, summary, run_meta, config_path)
+    _save_raw_samples(run_dir, "A", [("c=1", wl)])
+    write_run_charts(run_dir)
     _print_run("A", summary)
     print(f"Results: {run_dir}")
 
@@ -100,6 +127,7 @@ def _scenario_b(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
     concurrencies = scenario_cfg["concurrency"]
 
     sweep: list[dict] = []
+    raw: list[tuple[str, WorkloadResult]] = []
     backend = precision = ""
     for c in concurrencies:
         wl = closed_loop(base_url, concurrency=int(c), duration_sec=duration, warmup_sec=warmup)
@@ -107,6 +135,7 @@ def _scenario_b(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
         backend = backend or summary["model_backend"]
         precision = precision or summary["model_precision"]
         sweep.append({"concurrency": int(c), "results": summary})
+        raw.append((f"c={c}", wl))
         _print_run("B", summary, suffix=f" c={c}")
 
     run_meta["workload"] = "closed_loop"
@@ -115,6 +144,8 @@ def _scenario_b(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
     run_meta["backend"] = backend
     run_meta["precision"] = precision
     write_sweep_report(run_dir, "B", scenario_cfg, sweep, run_meta, config_path)
+    _save_raw_samples(run_dir, "B", raw)
+    write_sweep_charts(run_dir)
     print(f"Results: {run_dir}")
 
 
@@ -124,6 +155,7 @@ def _scenario_c(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
     rates = scenario_cfg["rate_rps"]
 
     sweep: list[dict] = []
+    raw: list[tuple[str, WorkloadResult]] = []
     backend = precision = ""
     for r in rates:
         wl = poisson(base_url, rate_rps=float(r), duration_sec=duration, warmup_sec=warmup)
@@ -131,6 +163,7 @@ def _scenario_c(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
         backend = backend or summary["model_backend"]
         precision = precision or summary["model_precision"]
         sweep.append({"concurrency": f"poisson@{r}rps", "results": summary})
+        raw.append((f"rate={r}rps", wl))
         _print_run("C", summary, suffix=f" rate={r}rps")
 
     run_meta["workload"] = "open_loop_poisson"
@@ -139,6 +172,8 @@ def _scenario_c(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
     run_meta["backend"] = backend
     run_meta["precision"] = precision
     write_sweep_report(run_dir, "C", scenario_cfg, sweep, run_meta, config_path)
+    _save_raw_samples(run_dir, "C", raw)
+    write_sweep_charts(run_dir)
     print(f"Results: {run_dir}")
 
 
@@ -174,6 +209,8 @@ def _scenario_d(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
     run_meta["metrics_pre"] = pre
     run_meta["metrics_post"] = post
     write_run_report(run_dir, "D", scenario_cfg, summary, run_meta, config_path)
+    _save_raw_samples(run_dir, "D", [("spike", wl)])
+    write_run_charts(run_dir)
     _print_run("D", summary)
     print(f"Results: {run_dir}")
 
@@ -185,6 +222,7 @@ def _scenario_e(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
     ratios = scenario_cfg["repeat_ratios"]
 
     sweep: list[dict] = []
+    raw: list[tuple[str, WorkloadResult]] = []
     backend = precision = ""
     for ratio in ratios:
         pre = _get_metrics(base_url)
@@ -212,6 +250,7 @@ def _scenario_e(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
             "results": summary,
             "observed_cache_hit_ratio": observed_ratio,
         })
+        raw.append((f"repeat={ratio:.2f}", wl))
         suffix = f" repeat={ratio:.2f}"
         if observed_ratio is not None:
             suffix += f" hits={observed_ratio * 100:.1f}%"
@@ -224,6 +263,8 @@ def _scenario_e(args, scenario_cfg: dict, base_url: str, run_dir: Path, run_meta
     run_meta["backend"] = backend
     run_meta["precision"] = precision
     write_sweep_report(run_dir, "E", scenario_cfg, sweep, run_meta, config_path)
+    _save_raw_samples(run_dir, "E", raw)
+    write_sweep_charts(run_dir)
     print(f"Results: {run_dir}")
 
 
