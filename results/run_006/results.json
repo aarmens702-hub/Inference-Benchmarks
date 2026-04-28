@@ -1,0 +1,202 @@
+{
+  "meta": {
+    "scenario": "E",
+    "started_at": "2026-04-28T22:32:39.984911+00:00",
+    "base_url": "http://127.0.0.1:8000",
+    "system": {
+      "hostname": "Mac-2.lan",
+      "platform": "macOS-15.5-arm64-arm-64bit",
+      "python_version": "3.11.14",
+      "machine": "arm64",
+      "cpu_count": 8
+    },
+    "workload": "cache_repeat",
+    "duration_sec": 30.0,
+    "warmup_sec": 3.0,
+    "rate_rps": 50.0,
+    "backend": "onnxruntime-cpu",
+    "precision": "fp32"
+  },
+  "sweep": [
+    {
+      "concurrency": "repeat=0.00",
+      "results": {
+        "latency_e2e": {
+          "count": 1541,
+          "mean_ms": 20.65723048307613,
+          "p50_ms": 19.569375086575747,
+          "p90_ms": 27.148415916599333,
+          "p95_ms": 30.317083932459354,
+          "p99_ms": 35.651149833574884,
+          "min_ms": 8.10908293351531,
+          "max_ms": 42.356916004791856
+        },
+        "latency_inference": {
+          "count": 1541,
+          "mean_ms": 8.463267035619763,
+          "p50_ms": 7.806792040355504,
+          "p90_ms": 13.162749935872853,
+          "p95_ms": 14.652541955001652,
+          "p99_ms": 17.47204107232392,
+          "min_ms": 4.204708966426551,
+          "max_ms": 20.91933402698487
+        },
+        "latency_queue_wait": {
+          "count": 1541,
+          "mean_ms": 9.766057737810462,
+          "p50_ms": 10.643875109963119,
+          "p90_ms": 11.174250044859946,
+          "p95_ms": 11.407167068682611,
+          "p99_ms": 17.989400005899313,
+          "min_ms": 0.09529106318950653,
+          "max_ms": 31.740250065922737
+        },
+        "throughput": {
+          "duration_sec": 30.019554584054276,
+          "requests": 1541,
+          "requests_per_sec": 51.33320668317128,
+          "errors": 0,
+          "error_rate": 0.0
+        },
+        "model_backend": "onnxruntime-cpu",
+        "model_precision": "fp32"
+      },
+      "observed_cache_hit_ratio": 0.8748376623376624
+    },
+    {
+      "concurrency": "repeat=0.20",
+      "results": {
+        "latency_e2e": {
+          "count": 1431,
+          "mean_ms": 131.5257577008355,
+          "p50_ms": 20.237958058714867,
+          "p90_ms": 385.8698750846088,
+          "p95_ms": 1049.4180415407754,
+          "p99_ms": 1581.2464087968694,
+          "min_ms": 0.37762499414384365,
+          "max_ms": 1643.363583018072
+        },
+        "latency_inference": {
+          "count": 1431,
+          "mean_ms": 9.80166503463193,
+          "p50_ms": 7.509042043238878,
+          "p90_ms": 16.0339999711141,
+          "p95_ms": 23.17337499698624,
+          "p99_ms": 51.75160837825393,
+          "min_ms": 0.0,
+          "max_ms": 520.2160840854049
+        },
+        "latency_queue_wait": {
+          "count": 1431,
+          "mean_ms": 114.86874764063086,
+          "p50_ms": 10.901042027398944,
+          "p90_ms": 353.27870899345726,
+          "p95_ms": 992.3037500120699,
+          "p99_ms": 1533.8683917769238,
+          "min_ms": 0.0,
+          "max_ms": 1625.2146660117432
+        },
+        "throughput": {
+          "duration_sec": 30.023279167013243,
+          "requests": 1431,
+          "requests_per_sec": 47.663014823918644,
+          "errors": 0,
+          "error_rate": 0.0
+        },
+        "model_backend": "onnxruntime-cpu",
+        "model_precision": "fp32"
+      },
+      "observed_cache_hit_ratio": 0.9051373760364169
+    },
+    {
+      "concurrency": "repeat=0.50",
+      "results": {
+        "latency_e2e": {
+          "count": 1448,
+          "mean_ms": 11.619366083785541,
+          "p50_ms": 15.222020505461842,
+          "p90_ms": 23.8151749712415,
+          "p95_ms": 28.000951814465225,
+          "p99_ms": 33.9589179889299,
+          "min_ms": 0.39645808283239603,
+          "max_ms": 67.79558304697275
+        },
+        "latency_inference": {
+          "count": 1448,
+          "mean_ms": 4.344462203691606,
+          "p50_ms": 4.705625004135072,
+          "p90_ms": 10.865584015846252,
+          "p95_ms": 13.388057867996292,
+          "p99_ms": 17.734030232531914,
+          "min_ms": 0.0,
+          "max_ms": 21.24416595324874
+        },
+        "latency_queue_wait": {
+          "count": 1448,
+          "mean_ms": 5.157714325903132,
+          "p50_ms": 2.2054999717511237,
+          "p90_ms": 11.146459029987454,
+          "p95_ms": 11.251404351787642,
+          "p99_ms": 11.577196530997753,
+          "min_ms": 0.0,
+          "max_ms": 46.23283306136727
+        },
+        "throughput": {
+          "duration_sec": 29.97801712504588,
+          "requests": 1448,
+          "requests_per_sec": 48.30206060527707,
+          "errors": 0,
+          "error_rate": 0.0
+        },
+        "model_backend": "onnxruntime-cpu",
+        "model_precision": "fp32"
+      },
+      "observed_cache_hit_ratio": 0.9377833753148614
+    },
+    {
+      "concurrency": "repeat=0.80",
+      "results": {
+        "latency_e2e": {
+          "count": 1476,
+          "mean_ms": 5.4842891958087865,
+          "p50_ms": 0.813021557405591,
+          "p90_ms": 19.836479041259736,
+          "p95_ms": 21.96248943801038,
+          "p99_ms": 31.53042748454027,
+          "min_ms": 0.3922500181943178,
+          "max_ms": 43.20629208814353
+        },
+        "latency_inference": {
+          "count": 1476,
+          "mean_ms": 1.5393356751772982,
+          "p50_ms": 0.0,
+          "p90_ms": 7.385812466964126,
+          "p95_ms": 8.905583992600441,
+          "p99_ms": 13.024531566770747,
+          "min_ms": 0.0,
+          "max_ms": 18.07566697243601
+        },
+        "latency_queue_wait": {
+          "count": 1476,
+          "mean_ms": 2.0214937693410397,
+          "p50_ms": 0.0,
+          "p90_ms": 11.093687498942018,
+          "p95_ms": 11.131968582049012,
+          "p99_ms": 11.311417270917445,
+          "min_ms": 0.0,
+          "max_ms": 11.753167025744915
+        },
+        "throughput": {
+          "duration_sec": 30.032400249969214,
+          "requests": 1476,
+          "requests_per_sec": 49.146920915903586,
+          "errors": 0,
+          "error_rate": 0.0
+        },
+        "model_backend": "onnxruntime-cpu",
+        "model_precision": "fp32"
+      },
+      "observed_cache_hit_ratio": 0.9769131417500807
+    }
+  ]
+}
