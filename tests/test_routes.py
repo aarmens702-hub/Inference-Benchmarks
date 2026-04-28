@@ -67,6 +67,7 @@ def _build_app(
         app.state.runner = runner
         app.state.batcher = batcher
         app.state.cache = cache
+        app.state.controller = None
         app.state.request_timeout_ms = request_timeout_ms
         try:
             yield

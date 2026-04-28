@@ -20,14 +20,17 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import deque
 from dataclasses import dataclass
 
 from inferbench.engine.model_runner import ModelRunner, Prediction
 from inferbench.engine.request_queue import BatchedRequest, RequestQueue
 
 
-@dataclass(frozen=True)
+@dataclass
 class BatcherConfig:
+    """Mutable so the W7 AdaptiveBatchController can tune live."""
+
     max_batch_size: int = 16
     max_wait_ms: float = 10.0
     queue_max_size: int = 0  # 0 = unbounded; W4 sets this
@@ -52,6 +55,9 @@ class DynamicBatcher:
         self._items_processed = 0
         self._batch_size_sum = 0
         self._batch_size_histogram: dict[int, int] = {}
+        # Per-request observed latency (queue_wait_ms + inference_ms),
+        # bounded so the controller computes p95 over the recent window.
+        self._recent_latencies: deque[float] = deque(maxlen=2048)
 
     async def start(self) -> None:
         if self._task is not None:
@@ -82,6 +88,10 @@ class DynamicBatcher:
     def batch_size_histogram(self) -> dict[int, int]:
         """Snapshot of batch_size -> count of batches processed at that size."""
         return dict(self._batch_size_histogram)
+
+    def recent_latencies(self) -> list[float]:
+        """Snapshot of recently-observed per-request latencies (ms)."""
+        return list(self._recent_latencies)
 
     async def submit(self, text: str) -> BatchResult:
         loop = asyncio.get_running_loop()
@@ -133,6 +143,7 @@ class DynamicBatcher:
 
         for i, req in enumerate(batch):
             queue_wait_ms = (inference_start - req.submitted_at) * 1000.0
+            self._recent_latencies.append(queue_wait_ms + run_result.inference_ms)
             result = BatchResult(
                 prediction=run_result.predictions[i],
                 batch_size=len(batch),

@@ -17,6 +17,7 @@ from fastapi import FastAPI
 
 from inferbench.engine.batcher import BatcherConfig, DynamicBatcher
 from inferbench.engine.cache import PredictionCache
+from inferbench.engine.controller import AdaptiveBatchController, ControllerConfig
 from inferbench.engine.model_runner import ModelRunner
 from inferbench.server.routes import register_routes
 
@@ -56,15 +57,32 @@ async def _lifespan(app: FastAPI):
     if cache_cfg.get("enabled", False):
         cache = PredictionCache(capacity=int(cache_cfg.get("max_entries", 4096)))
 
+    controller: AdaptiveBatchController | None = None
+    controller_cfg = config.get("controller", {}) or {}
+    if controller_cfg.get("enabled", False) and batcher is not None:
+        controller = AdaptiveBatchController(
+            batcher,
+            ControllerConfig(
+                latency_slo_ms=float(controller_cfg.get("latency_slo_ms", 100.0)),
+                adjust_interval_sec=float(controller_cfg.get("adjust_interval_sec", 5.0)),
+                min_batch_size=int(controller_cfg.get("min_batch_size", 1)),
+                max_batch_size=int(controller_cfg.get("max_batch_size", 32)),
+            ),
+        )
+        await controller.start()
+
     app.state.runner = runner
     app.state.batcher = batcher
     app.state.cache = cache
+    app.state.controller = controller
     app.state.request_timeout_ms = float(queue_cfg.get("request_timeout_ms", 5000))
     app.state.config = config
 
     try:
         yield
     finally:
+        if controller is not None:
+            await controller.stop()
         if batcher is not None:
             await batcher.stop()
 

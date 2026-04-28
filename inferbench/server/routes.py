@@ -22,6 +22,7 @@ from fastapi import FastAPI, HTTPException, Request
 
 from inferbench.engine.batcher import BatchResult, DynamicBatcher
 from inferbench.engine.cache import PredictionCache, cache_key
+from inferbench.engine.controller import AdaptiveBatchController
 from inferbench.engine.request_queue import QueueOverflowError
 from inferbench.server.schemas import (
     HealthResponse,
@@ -133,7 +134,28 @@ def register_routes(app: FastAPI) -> None:
             out["batcher"] = {
                 "queue_size": batcher.qsize(),
                 "avg_batch_size": batcher.avg_batch_size,
+                "max_batch_size": batcher.config.max_batch_size,
+                "max_wait_ms": batcher.config.max_wait_ms,
                 "batch_size_histogram": {str(k): v for k, v in batcher.batch_size_histogram().items()},
+            }
+        controller: AdaptiveBatchController | None = request.app.state.controller
+        if controller is not None:
+            recent = controller.decisions[-10:]
+            out["controller"] = {
+                "tick": recent[-1].tick if recent else 0,
+                "last_action": recent[-1].action if recent else "n/a",
+                "last_p95_ms": recent[-1].p95_ms if recent else None,
+                "recent_decisions": [
+                    {
+                        "tick": d.tick,
+                        "action": d.action,
+                        "p95_ms": d.p95_ms,
+                        "qsize": d.qsize,
+                        "max_batch_size": d.max_batch_size,
+                        "max_wait_ms": d.max_wait_ms,
+                    }
+                    for d in recent
+                ],
             }
         return out
 
