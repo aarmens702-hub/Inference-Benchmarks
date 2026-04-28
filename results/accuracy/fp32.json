@@ -1,0 +1,24 @@
+{
+  "model_dir": "models/distilbert-sst2-fp32",
+  "model_id": "distilbert-base-uncased-finetuned-sst-2-english",
+  "precision": "fp32",
+  "model_size_bytes": 267958137,
+  "examples_evaluated": 872,
+  "correct": 794,
+  "accuracy": 0.9105504587155964,
+  "per_class": {
+    "negative": {
+      "correct": 381,
+      "total": 428,
+      "accuracy": 0.8901869158878505
+    },
+    "positive": {
+      "correct": 413,
+      "total": 444,
+      "accuracy": 0.9301801801801802
+    }
+  },
+  "batch_size": 16,
+  "elapsed_sec": 10.0007518340135,
+  "examples_per_sec": 87.19344450026705
+}
