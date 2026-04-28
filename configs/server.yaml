@@ -8,8 +8,8 @@ server:
 
 model:
   name: distilbert-sst2
-  path: models/distilbert-sst2-int8
-  precision: int8-dynamic   # fp32 | int8-dynamic | int8-static
+  path: models/distilbert-sst2-fp32
+  precision: fp32           # fp32 | int8-dynamic | int8-static
   backend: onnxruntime-cpu  # onnxruntime-cpu | onnxruntime-cuda
 
 batching:
