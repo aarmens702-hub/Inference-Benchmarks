@@ -1,0 +1,65 @@
+{
+  "meta": {
+    "scenario": "C",
+    "started_at": "2026-04-28T23:15:36.363605+00:00",
+    "base_url": "http://127.0.0.1:8000",
+    "system": {
+      "hostname": "Mac-2.lan",
+      "platform": "macOS-15.5-arm64-arm-64bit",
+      "python_version": "3.11.14",
+      "machine": "arm64",
+      "cpu_count": 8
+    },
+    "workload": "open_loop_poisson",
+    "duration_sec": 60.0,
+    "warmup_sec": 5.0,
+    "backend": "onnxruntime-cpu",
+    "precision": "fp32"
+  },
+  "sweep": [
+    {
+      "concurrency": "poisson@200rps",
+      "results": {
+        "latency_e2e": {
+          "count": 12022,
+          "mean_ms": 106.83220498446235,
+          "p50_ms": 45.07947899401188,
+          "p90_ms": 222.67082154285157,
+          "p95_ms": 541.8527497269652,
+          "p99_ms": 920.5756850575557,
+          "min_ms": 7.9242909559980035,
+          "max_ms": 1018.7911249231547
+        },
+        "latency_inference": {
+          "count": 12022,
+          "mean_ms": 32.12578207065736,
+          "p50_ms": 26.608249987475574,
+          "p90_ms": 61.652750009670854,
+          "p95_ms": 67.84298189449987,
+          "p99_ms": 93.31116708926857,
+          "min_ms": 3.3531669760122895,
+          "max_ms": 179.24862494692206
+        },
+        "latency_queue_wait": {
+          "count": 12022,
+          "mean_ms": 66.00600256500493,
+          "p50_ms": 10.742728947661817,
+          "p90_ms": 137.80419128015637,
+          "p95_ms": 428.2295351848001,
+          "p99_ms": 855.9039245359597,
+          "min_ms": 0.014375080354511738,
+          "max_ms": 966.25708299689
+        },
+        "throughput": {
+          "duration_sec": 60.60807583399583,
+          "requests": 12022,
+          "requests_per_sec": 198.35640439943995,
+          "errors": 0,
+          "error_rate": 0.0
+        },
+        "model_backend": "onnxruntime-cpu",
+        "model_precision": "fp32"
+      }
+    }
+  ]
+}

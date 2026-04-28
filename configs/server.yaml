@@ -26,7 +26,7 @@ cache:
   max_entries: 4096
 
 controller:
-  enabled: false            # toggled on in W7
+  enabled: true             # W7: adaptive batching SLO controller
   latency_slo_ms: 100
   min_batch_size: 1
   max_batch_size: 32
