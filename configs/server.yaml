@@ -10,7 +10,7 @@ model:
   name: distilbert-sst2
   path: models/distilbert-sst2-fp32
   precision: fp32           # fp32 | int8-dynamic | int8-static
-  backend: onnxruntime-cpu  # onnxruntime-cpu | onnxruntime-cuda
+  backend: onnxruntime-coreml  # onnxruntime-cpu | onnxruntime-cuda | onnxruntime-coreml | onnxruntime-tensorrt
 
 batching:
   enabled: true             # W3: dynamic batching on by default
@@ -26,7 +26,7 @@ cache:
   max_entries: 4096
 
 controller:
-  enabled: true             # W7: adaptive batching SLO controller
+  enabled: false            # off for clean backend-comparison sweep
   latency_slo_ms: 100
   min_batch_size: 1
   max_batch_size: 32
