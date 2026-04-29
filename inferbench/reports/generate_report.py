@@ -79,8 +79,17 @@ def format_sweep_summary(scenario_id: str, scenario_cfg: dict, sweep: list[dict]
         "|------------:|--:|-------:|-------:|-------:|-------:|--------:|----:|------:|",
     ]
     for entry in sweep:
-        lat = entry["results"]["latency_e2e"]
+        lat = entry["results"].get("latency_e2e")
         tput = entry["results"]["throughput"]
+        if lat is None:
+            # No successful samples (every request errored — common when a
+            # backend is unstable under concurrent load). Render a placeholder
+            # row instead of crashing the report.
+            lines.append(
+                f"| {entry['concurrency']} | 0 | n/a | n/a | n/a | n/a | n/a "
+                f"| {tput['requests_per_sec']:.1f} | {tput['error_rate'] * 100:.2f} |"
+            )
+            continue
         lines.append(
             f"| {entry['concurrency']} | {lat['count']} "
             f"| {lat['p50_ms']:.2f} | {lat['p90_ms']:.2f} | {lat['p95_ms']:.2f} | {lat['p99_ms']:.2f} "

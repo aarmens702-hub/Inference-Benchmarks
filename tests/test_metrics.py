@@ -55,7 +55,16 @@ def test_throughput_stats_basic():
     assert t.requests == 100
     assert t.errors == 2
     assert t.requests_per_sec == 10.0
-    assert t.error_rate == 0.02
+    # 2 errors out of 102 attempts
+    assert t.error_rate == pytest.approx(2 / 102)
+
+
+def test_throughput_stats_error_rate_capped_at_one():
+    # When errors >> successes (e.g. unstable backend under load),
+    # error_rate must stay in [0, 1] — the old impl returned >1.
+    t = throughput_stats(requests=1, errors=99, duration_sec=10.0)
+    assert 0.0 <= t.error_rate <= 1.0
+    assert t.error_rate == pytest.approx(99 / 100)
 
 
 def test_throughput_stats_rejects_zero_duration():

@@ -76,12 +76,16 @@ def latency_stats(latencies_ms: list[float]) -> LatencyStats:
 
 
 def throughput_stats(requests: int, errors: int, duration_sec: float) -> ThroughputStats:
+    """`requests` is the count of *successful* requests. `errors` is failures.
+    error_rate is fraction-of-attempts that failed: errors / (requests + errors).
+    """
     if duration_sec <= 0:
         raise ValueError(f"duration_sec must be > 0, got {duration_sec}")
+    total_attempted = requests + errors
     return ThroughputStats(
         duration_sec=duration_sec,
         requests=requests,
         requests_per_sec=requests / duration_sec,
         errors=errors,
-        error_rate=errors / requests if requests else 0.0,
+        error_rate=errors / total_attempted if total_attempted else 0.0,
     )
