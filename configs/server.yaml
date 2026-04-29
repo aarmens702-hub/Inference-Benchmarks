@@ -1,5 +1,18 @@
 # InferBench server configuration.
 # Loaded by inferbench.server.app at startup.
+#
+# Defaults below are the recommended out-of-the-box setup, validated by
+# the committed benchmarks under results/. To explore other regimes:
+#
+#   - Faster + smaller, slight accuracy loss:
+#       model.path: models/distilbert-sst2-int8
+#       model.precision: int8-dynamic
+#     (run `make quantize-model` first; tradeoff in results/quant_tradeoff/)
+#
+#   - GPU / CoreML / TensorRT: see docs/BACKENDS.md
+#
+#   - Adaptive batching demo: controller.enabled=true (works best at
+#     moderate load; can regress at saturation, see TRADEOFFS.md §6)
 
 server:
   host: 0.0.0.0
@@ -9,24 +22,24 @@ server:
 model:
   name: distilbert-sst2
   path: models/distilbert-sst2-fp32
-  precision: fp32           # fp32 | int8-dynamic | int8-static
-  backend: onnxruntime-coreml  # onnxruntime-cpu | onnxruntime-cuda | onnxruntime-coreml | onnxruntime-tensorrt
+  precision: fp32             # fp32 | int8-dynamic | int8-static
+  backend: onnxruntime-cpu    # cpu | cuda | coreml | tensorrt — see docs/BACKENDS.md
 
 batching:
-  enabled: true             # W3: dynamic batching on by default
+  enabled: true               # dynamic batching across HTTP requests
   max_batch_size: 16
   max_wait_ms: 10
 
 queue:
-  max_size: 1024            # backpressure threshold (HTTP 429)
-  request_timeout_ms: 5000
+  max_size: 1024              # backpressure: put_nowait fails with 429 above this
+  request_timeout_ms: 5000    # asyncio.wait_for returns 504 after this
 
 cache:
-  enabled: false            # off for raw FP32-vs-INT8 latency comparison; flip back on for E
+  enabled: true               # LRU prediction cache, sub-ms hits
   max_entries: 4096
 
 controller:
-  enabled: false            # off for clean backend-comparison sweep
+  enabled: false              # opt-in adaptive batcher (see docs/TRADEOFFS.md §6)
   latency_slo_ms: 100
   min_batch_size: 1
   max_batch_size: 32
