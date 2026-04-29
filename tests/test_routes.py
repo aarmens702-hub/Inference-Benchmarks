@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import time
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -127,7 +126,7 @@ def test_infer_returns_429_when_queue_full():
 
     import httpx
 
-    with TestClient(app) as client:
+    with TestClient(app):  # ensure lifespan runs (starts batcher)
         # Fire many concurrent requests; once queue=2 fills, the 3rd+
         # rejects with 429 because put_nowait raises QueueOverflowError.
         async def fire(n: int):

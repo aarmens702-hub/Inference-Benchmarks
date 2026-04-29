@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: lint + test (no model)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          # CI never needs torch/transformers for export — model_runner tests
+          # auto-skip when models/distilbert-sst2-fp32/model.onnx is missing.
+          # Install everything except the heavy export-time deps.
+          grep -vE '^(torch|optimum|transformers)' requirements.txt > requirements-ci.txt
+          pip install -r requirements-ci.txt -r requirements-dev.txt
+
+      - name: Lint
+        run: python -m ruff check inferbench tests
+
+      - name: Test
+        run: python -m pytest -q

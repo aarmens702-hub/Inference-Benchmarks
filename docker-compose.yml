@@ -1,0 +1,21 @@
+services:
+  inferbench:
+    build: .
+    image: inferbench:dev
+    container_name: inferbench
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the exported models in so we don't have to bake the 256 MB
+      # ONNX file into the image. `make export-model` produces these.
+      - ./models:/app/models:ro
+      - ./configs:/app/configs:ro
+    environment:
+      INFERBENCH_CONFIG: /app/configs/server.yaml
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped

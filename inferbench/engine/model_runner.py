@@ -20,7 +20,10 @@ from typing import Sequence
 
 import numpy as np
 import onnxruntime as ort
-from transformers import AutoTokenizer
+
+# `transformers` is heavy and is only needed to load the tokenizer in
+# ModelRunner.__init__. Tests use FakeRunner (which doesn't construct a
+# real ModelRunner), so deferring the import keeps CI deps small.
 
 
 @dataclass(frozen=True)
@@ -128,6 +131,8 @@ class ModelRunner:
             sess_options=sess_options,
             providers=providers,
         )
+
+        from transformers import AutoTokenizer  # deferred — see top-of-file note
 
         self.tokenizer = AutoTokenizer.from_pretrained(str(self.model_dir))
         self._input_names = {inp.name for inp in self.session.get_inputs()}
