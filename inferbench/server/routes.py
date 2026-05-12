@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import RedirectResponse
 
 from inferbench.engine.batcher import DynamicBatcher
 from inferbench.engine.cache import PredictionCache
@@ -48,6 +49,12 @@ async def _serve(entry: ModelEntry, payload: InferRequest, request: Request) -> 
 def register_routes(app: FastAPI) -> None:
     limiter = app.state.limiter
     rate = app.state.rate_limit_infer
+
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        # Send the bare root to the demo if it's mounted, otherwise /health.
+        target = "/demo" if (app.state.config.get("demo", {}) or {}).get("enabled", True) else "/health"
+        return RedirectResponse(url=target, status_code=307)
 
     @app.get("/health", response_model=HealthResponse)
     def health(request: Request) -> HealthResponse:
