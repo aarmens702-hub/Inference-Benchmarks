@@ -195,4 +195,9 @@ def build_demo(app: FastAPI) -> gr.Blocks:
             inputs=[text_input, history_state],
             outputs=[left_panel, right_panel, history_state, history_table],
         )
+    # Required for async handlers when Gradio is mounted into FastAPI —
+    # without it, async .click() chains fire but never propagate updates
+    # back to the UI components. default_concurrency_limit=4 caps how
+    # many compare requests can run in parallel against the registry.
+    demo.queue(default_concurrency_limit=4)
     return demo
