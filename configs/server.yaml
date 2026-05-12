@@ -50,3 +50,8 @@ rate_limit:
 
 # admin endpoints require Authorization: Bearer $INFERBENCH_ADMIN_TOKEN.
 # if the env var is unset, /admin/* returns 503.
+
+# /demo mounts a Gradio side-by-side comparator. Requires at least two
+# models registered above. Set enabled: false to ship api-only.
+demo:
+  enabled: true

@@ -152,6 +152,15 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     register_routes(app)
+
+    if (config.get("demo", {}) or {}).get("enabled", True):
+        # Lazy import so non-demo deploys don't need the gradio dep.
+        import gradio as gr
+
+        from inferbench.server.demo import build_demo
+
+        gr.mount_gradio_app(app, build_demo(app), path="/demo")
+
     return app
 
 
