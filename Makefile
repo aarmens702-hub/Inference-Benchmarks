@@ -6,13 +6,13 @@ HOST ?= 127.0.0.1
 PORT ?= 8000
 SCENARIO ?= A
 
-HF_SPACE ?= huggingface.co/spaces/aarmens702-hub/inferbench
+HF_SPACE ?= huggingface.co/spaces/Aarmen/inferbench
 HF_REMOTE_NAME ?= space
 
 .PHONY: help install venv export-model quantize-model evaluate-accuracy \
         serve test lint bench bench-k6 bench-clean clean \
         compose-up compose-down compose-logs ci \
-        space-build space-remote deploy-space
+        space-remote deploy-space
 
 help:
 	@echo "InferBench Makefile targets:"
@@ -43,7 +43,6 @@ help:
 	@echo "    compose-logs       tail container logs"
 	@echo ""
 	@echo "  hf spaces:"
-	@echo "    space-build        build Dockerfile.spaces locally to verify"
 	@echo "    space-remote       add huggingface as a git remote ($(HF_REMOTE_NAME) -> $(HF_SPACE))"
 	@echo "    deploy-space       push main to the huggingface remote"
 
@@ -92,9 +91,6 @@ compose-down:
 
 compose-logs:
 	docker compose logs -f --tail=100
-
-space-build:
-	docker build -f Dockerfile.spaces -t inferbench-space:dev .
 
 space-remote:
 	@if git remote get-url $(HF_REMOTE_NAME) >/dev/null 2>&1; then \

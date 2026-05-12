@@ -1,3 +1,15 @@
+---
+title: InferBench
+emoji: ⚡
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+short_description: FP32 vs INT8 DistilBERT side-by-side — same model, two precisions, two latency numbers.
+---
+
 # InferBench
 
 > A single-node ML inference-serving harness for ONNX Runtime — measures
@@ -6,13 +18,13 @@
 > on real traffic.
 
 [![CI](https://github.com/aarmens702-hub/Inference-Benchmarks/actions/workflows/ci.yml/badge.svg)](https://github.com/aarmens702-hub/Inference-Benchmarks/actions/workflows/ci.yml)
-[![Live demo](https://img.shields.io/badge/live%20demo-huggingface%20spaces-yellow)](https://huggingface.co/spaces/aarmens702-hub/inferbench)
+[![Live demo](https://img.shields.io/badge/live%20demo-huggingface%20spaces-yellow)](https://huggingface.co/spaces/Aarmen/inferbench)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![ONNX Runtime](https://img.shields.io/badge/ONNX%20Runtime-1.25-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Tests](https://img.shields.io/badge/tests-55%20passing-brightgreen)
 
-**Live demo:** [huggingface.co/spaces/aarmens702-hub/inferbench](https://huggingface.co/spaces/aarmens702-hub/inferbench) — paste a sentence, watch FP32 vs INT8 give the same answer with very different latency.
+**Live demo:** [huggingface.co/spaces/Aarmen/inferbench](https://huggingface.co/spaces/Aarmen/inferbench) — paste a sentence, watch FP32 vs INT8 give the same answer with very different latency.
 
 ![Headline result: bench(B) sweep](results/headline/concurrency_sweep.png)
 

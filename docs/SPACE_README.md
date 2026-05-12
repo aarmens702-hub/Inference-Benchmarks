@@ -1,47 +1,45 @@
-# HuggingFace Space README
+# HuggingFace Spaces deploy
 
-When you create the Space, paste the YAML block below at the very top
-of the Space's `README.md`. The Space repo is separate from this GitHub
-repo (or a separate branch — see `Makefile`).
+The main `README.md` already carries the HF Spaces YAML frontmatter at the
+top (title, emoji, sdk=docker, app_port=7860). The Space picks it up
+automatically when you push.
 
-```
----
-title: InferBench
-emoji: ⚡
-colorFrom: blue
-colorTo: green
-sdk: docker
-app_port: 7860
-pinned: false
-license: mit
----
+Build target: the root `Dockerfile` (same one used by `docker compose`).
+It bakes the FP32 + INT8 ONNX models into the image at build time so the
+Space boots ready to serve.
 
-# InferBench live demo
+## First-time setup
 
-FP32 vs INT8 DistilBERT-SST2, side by side. Type a sentence, see both
-predictions and both latency numbers.
+1. Create the Space at https://huggingface.co/new-space with SDK = **Docker**, template = **Blank**.
 
-Full project: https://github.com/aarmens702-hub/Inference-Benchmarks
-```
+2. Add an HF access token with **write** scope at https://huggingface.co/settings/tokens.
 
-After creating the Space:
+3. Save the token to your local credential store:
 
-```
-make space-remote                # one-time: add the huggingface git remote
-make deploy-space                # push main; the Space builds Dockerfile.spaces
-```
+       pip install huggingface_hub
+       hf auth login            # paste the token when prompted
 
-Override `HF_SPACE` if the URL differs:
+4. Add the Space as a git remote and push:
 
-```
-make HF_SPACE=huggingface.co/spaces/yourname/yourspace deploy-space
-```
+       make space-remote        # one-time: git remote add space https://huggingface.co/spaces/Aarmen/inferbench
+       make deploy-space        # git push space main
 
-If you want the GitHub repo and the Space repo to share the same
-history, the Space repo can be a sibling git remote of this repo. If
-you prefer them separate, push only a `space` branch:
+If your Space lives at a different URL, override:
 
-```
-git checkout -b space
-git push $(HF_REMOTE_NAME) space:main
-```
+    make HF_SPACE=huggingface.co/spaces/<owner>/<name> deploy-space
+
+## Subsequent deploys
+
+    git push                     # to github
+    make deploy-space            # to huggingface
+
+Or push to both remotes at once:
+
+    git push origin main && git push space main
+
+## Build behaviour
+
+The first build runs `python -m inferbench.models.export_model` and
+`python -m inferbench.models.quantize_model` inside the image, which
+takes ~3–5 minutes. HF caches the Docker layer, so subsequent code-only
+pushes reuse the model layer and rebuild in ~30 seconds.
