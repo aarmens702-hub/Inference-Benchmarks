@@ -24,7 +24,17 @@ short_description: FP32 vs INT8 DistilBERT side by side
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Tests](https://img.shields.io/badge/tests-55%20passing-brightgreen)
 
-**Live demo:** [huggingface.co/spaces/Aarmen/inferbench](https://huggingface.co/spaces/Aarmen/inferbench) — paste a sentence, watch FP32 vs INT8 give the same answer with very different latency.
+## Try it now
+
+**[huggingface.co/spaces/Aarmen/inferbench](https://huggingface.co/spaces/Aarmen/inferbench)** — public, free, no sign-in. Paste a sentence, click compare, watch FP32 and INT8 give the same prediction with different latency badges.
+
+![Live demo: FP32 vs INT8 side-by-side comparison on HuggingFace Spaces](docs/assets/demo_screenshot.png)
+
+Both models classify the same input. Score agreement to four decimal places (0.9998 vs 0.9997). INT8 is faster on both wall-clock (10.8 → 9.4 ms) and pure inference (10.4 → 8.9 ms). That's the project's whole thesis in one button press.
+
+> Free-tier note: the Space sleeps after ~48 h of zero traffic. First request after sleep takes ~30 s to wake; subsequent requests are fast.
+
+---
 
 ![Headline result: bench(B) sweep](results/headline/concurrency_sweep.png)
 
