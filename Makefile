@@ -6,9 +6,13 @@ HOST ?= 127.0.0.1
 PORT ?= 8000
 SCENARIO ?= A
 
+HF_SPACE ?= huggingface.co/spaces/aarmens702-hub/inferbench
+HF_REMOTE_NAME ?= space
+
 .PHONY: help install venv export-model quantize-model evaluate-accuracy \
         serve test lint bench bench-k6 bench-clean clean \
-        compose-up compose-down compose-logs ci
+        compose-up compose-down compose-logs ci \
+        space-build space-remote deploy-space
 
 help:
 	@echo "InferBench Makefile targets:"
@@ -37,6 +41,11 @@ help:
 	@echo "    compose-up         docker compose up --build -d"
 	@echo "    compose-down       docker compose down"
 	@echo "    compose-logs       tail container logs"
+	@echo ""
+	@echo "  hf spaces:"
+	@echo "    space-build        build Dockerfile.spaces locally to verify"
+	@echo "    space-remote       add huggingface as a git remote ($(HF_REMOTE_NAME) -> $(HF_SPACE))"
+	@echo "    deploy-space       push main to the huggingface remote"
 
 venv:
 	python3.11 -m venv .venv
@@ -83,6 +92,20 @@ compose-down:
 
 compose-logs:
 	docker compose logs -f --tail=100
+
+space-build:
+	docker build -f Dockerfile.spaces -t inferbench-space:dev .
+
+space-remote:
+	@if git remote get-url $(HF_REMOTE_NAME) >/dev/null 2>&1; then \
+		echo "remote $(HF_REMOTE_NAME) already set to: $$(git remote get-url $(HF_REMOTE_NAME))"; \
+	else \
+		git remote add $(HF_REMOTE_NAME) https://$(HF_SPACE); \
+		echo "added remote $(HF_REMOTE_NAME) -> https://$(HF_SPACE)"; \
+	fi
+
+deploy-space: space-remote
+	git push $(HF_REMOTE_NAME) main
 
 clean:
 	rm -rf .pytest_cache __pycache__ */__pycache__ */*/__pycache__

@@ -6,10 +6,13 @@
 > on real traffic.
 
 [![CI](https://github.com/aarmens702-hub/Inference-Benchmarks/actions/workflows/ci.yml/badge.svg)](https://github.com/aarmens702-hub/Inference-Benchmarks/actions/workflows/ci.yml)
+[![Live demo](https://img.shields.io/badge/live%20demo-huggingface%20spaces-yellow)](https://huggingface.co/spaces/aarmens702-hub/inferbench)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![ONNX Runtime](https://img.shields.io/badge/ONNX%20Runtime-1.25-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tests](https://img.shields.io/badge/tests-48%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-55%20passing-brightgreen)
+
+**Live demo:** [huggingface.co/spaces/aarmens702-hub/inferbench](https://huggingface.co/spaces/aarmens702-hub/inferbench) — paste a sentence, watch FP32 vs INT8 give the same answer with very different latency.
 
 ![Headline result: bench(B) sweep](results/headline/concurrency_sweep.png)
 
@@ -473,6 +476,28 @@ make ci                # ruff + pytest, no model required
 make compose-up        # docker compose up --build -d
 curl http://localhost:8000/health
 make compose-down
+```
+
+### Open the Gradio demo locally
+
+```bash
+make serve             # FastAPI + /demo mounted
+open http://127.0.0.1:8000/demo
+```
+
+`server.yaml` defines `models:` with both `fp32` and `int8`. The demo
+fans the input out to both in parallel and renders a latency badge per
+side. To ship API-only, set `demo.enabled: false`.
+
+### Deploy to HuggingFace Spaces
+
+The `Dockerfile.spaces` variant bakes the FP32 + INT8 models into the
+image at build time so the Space boots ready to serve. After creating
+the Space (see [docs/SPACE_README.md](docs/SPACE_README.md)):
+
+```bash
+make space-remote      # one-time: add huggingface as a git remote
+make deploy-space      # push main → Space builds and goes live
 ```
 
 ### Hit the API directly

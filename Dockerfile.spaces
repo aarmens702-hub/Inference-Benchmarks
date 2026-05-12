@@ -1,0 +1,34 @@
+# HuggingFace Spaces image. Differs from the local Dockerfile in two
+# ways: models are exported inside the image (Spaces builds don't have
+# our local models/ directory), and the listen port honors $PORT
+# (Spaces sets it to 7860; we fall back to 8000 for local runs).
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/app/.cache/huggingface
+
+WORKDIR /app
+
+# System deps needed by tokenizers and ONNX Runtime quantization.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY inferbench/ ./inferbench/
+COPY configs/ ./configs/
+
+# Bake the exported + quantized ONNX models into the image. Adds ~320 MB
+# but means the Space boots ready to serve. Cached as a Docker layer so
+# rebuilds without code changes are fast.
+RUN python -m inferbench.models.export_model \
+    && python -m inferbench.models.quantize_model
+
+EXPOSE 7860
+
+CMD ["sh", "-c", "uvicorn inferbench.server.app:app --host 0.0.0.0 --port ${PORT:-7860}"]

@@ -1,0 +1,31 @@
+# Local dev artefacts that shouldn't enter the image
+.venv/
+.git/
+.github/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+**/__pycache__/
+
+# Benchmark output — recreated at runtime
+results/
+
+# Pre-exported models — Dockerfile.spaces re-exports inside the image
+models/
+
+# Editor / OS junk
+.DS_Store
+.idea/
+.vscode/
+
+# Docs (not needed at runtime)
+docs/
+README.md
+*.md
+!configs/*.md
+
+# Plans / scratch
+/tmp/
+.env
+.env.local
