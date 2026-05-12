@@ -25,3 +25,4 @@ torch>=2.2,<2.7
 
 # Optional metrics endpoint
 # prometheus-client>=0.20,<1.0
+slowapi>=0.1.9

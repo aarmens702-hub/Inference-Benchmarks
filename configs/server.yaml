@@ -1,29 +1,27 @@
 # InferBench server configuration.
 # Loaded by inferbench.server.app at startup.
 #
-# Defaults below are the recommended out-of-the-box setup, validated by
-# the committed benchmarks under results/. To explore other regimes:
+# Multiple models can be served from the same process. The first model
+# in `models:` is the default for /infer (without a name). /infer/{name}
+# routes to a specific model. Demo at /demo posts to both.
 #
-#   - Faster + smaller, slight accuracy loss:
-#       model.path: models/distilbert-sst2-int8
-#       model.precision: int8-dynamic
-#     (run `make quantize-model` first; tradeoff in results/quant_tradeoff/)
-#
-#   - GPU / CoreML / TensorRT: see docs/BACKENDS.md
-#
-#   - Adaptive batching demo: controller.enabled=true (works best at
-#     moderate load; can regress at saturation, see TRADEOFFS.md §6)
+# Single-model config (legacy) still works: a top-level `model:` block
+# is treated as a 1-entry models list named "default".
 
 server:
   host: 0.0.0.0
   port: 8000
   log_level: info
 
-model:
-  name: distilbert-sst2
-  path: models/distilbert-sst2-fp32
-  precision: fp32             # fp32 | int8-dynamic | int8-static
-  backend: onnxruntime-cpu    # cpu | cuda | coreml | tensorrt — see docs/BACKENDS.md
+models:
+  - name: fp32
+    path: models/distilbert-sst2-fp32
+    precision: fp32
+    backend: onnxruntime-cpu
+  - name: int8
+    path: models/distilbert-sst2-int8
+    precision: int8-dynamic
+    backend: onnxruntime-cpu
 
 batching:
   enabled: true               # dynamic batching across HTTP requests
@@ -44,3 +42,11 @@ controller:
   min_batch_size: 1
   max_batch_size: 32
   adjust_interval_sec: 5
+
+# rate limit applied to /infer* (slowapi, per-IP). Format: "N/period".
+rate_limit:
+  enabled: true
+  infer: "30/minute"
+
+# admin endpoints require Authorization: Bearer $INFERBENCH_ADMIN_TOKEN.
+# if the env var is unset, /admin/* returns 503.

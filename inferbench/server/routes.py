@@ -1,29 +1,17 @@
-"""HTTP routes: /health and /infer.
-
-If a DynamicBatcher is registered on app.state, /infer submits each
-input through the batcher (one queue item per text). Otherwise it
-calls ModelRunner.run directly.
-
-W4 adds three production concerns at the route layer:
-
-- Cache lookup (cache_hit responses skip the queue entirely).
-- 429 Too Many Requests when the bounded queue rejects an item.
-- 504 Gateway Timeout when a request waits longer than
-  request_timeout_ms.
-"""
-
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 import uuid
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 
 from inferbench.engine.batcher import BatchResult, DynamicBatcher
 from inferbench.engine.cache import PredictionCache, cache_key
 from inferbench.engine.controller import AdaptiveBatchController
 from inferbench.engine.request_queue import QueueOverflowError
+from inferbench.server.registry import ModelEntry, ModelRegistry
 from inferbench.server.schemas import (
     HealthResponse,
     InferRequest,
@@ -32,10 +20,24 @@ from inferbench.server.schemas import (
 )
 
 
+def _require_admin(authorization: str | None) -> None:
+    token = os.environ.get("INFERBENCH_ADMIN_TOKEN")
+    if not token:
+        raise HTTPException(status_code=503, detail="admin endpoints disabled")
+    if authorization != f"Bearer {token}":
+        raise HTTPException(status_code=401, detail="admin token required")
+
+
 def register_routes(app: FastAPI) -> None:
+    limiter = app.state.limiter
+
     @app.get("/health", response_model=HealthResponse)
     def health(request: Request) -> HealthResponse:
-        runner = request.app.state.runner
+        registry: ModelRegistry = request.app.state.registry
+        default = registry.default()
+        if default is None:
+            raise HTTPException(status_code=503, detail="no models registered")
+        runner = default.runner
         return HealthResponse(
             status="ok",
             model_id=runner.metadata.model_id,
@@ -43,17 +45,32 @@ def register_routes(app: FastAPI) -> None:
             precision=runner.metadata.precision,
         )
 
-    @app.post("/infer", response_model=InferResponse)
-    async def infer(payload: InferRequest, request: Request) -> InferResponse:
-        runner = request.app.state.runner
-        batcher: DynamicBatcher | None = request.app.state.batcher
+    @app.get("/version")
+    def version(request: Request) -> dict:
+        registry: ModelRegistry = request.app.state.registry
+        return {
+            "git_sha": request.app.state.git_sha,
+            "models": [
+                {
+                    "name": e.name,
+                    "precision": e.runner.metadata.precision,
+                    "backend": e.runner.metadata.backend,
+                }
+                for e in registry.all()
+            ],
+        }
+
+    rate = app.state.rate_limit_infer
+
+    async def _infer_impl(entry: ModelEntry, payload: InferRequest, request: Request) -> InferResponse:
         cache: PredictionCache | None = request.app.state.cache
         request_timeout_ms: float = request.app.state.request_timeout_ms
 
+        runner = entry.runner
+        batcher = entry.batcher
         request_id = payload.request_id or str(uuid.uuid4())
         t_start = time.perf_counter()
 
-        # Reserve a slot per input (preserves request ordering).
         n = len(payload.inputs)
         predictions: list[PredictionItem | None] = [None] * n
         miss_indices: list[int] = []
@@ -116,10 +133,34 @@ def register_routes(app: FastAPI) -> None:
             model_precision=runner.metadata.precision,
         )
 
+    async def infer_default(request: Request, payload: InferRequest) -> InferResponse:
+        registry: ModelRegistry = request.app.state.registry
+        entry = registry.default()
+        if entry is None:
+            raise HTTPException(status_code=503, detail="no models registered")
+        return await _infer_impl(entry, payload, request)
+
+    async def infer_named(request: Request, model_name: str, payload: InferRequest) -> InferResponse:
+        registry: ModelRegistry = request.app.state.registry
+        entry = registry.get(model_name)
+        if entry is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"unknown model {model_name!r}; available: {registry.names()}",
+            )
+        return await _infer_impl(entry, payload, request)
+
+    if rate is not None:
+        infer_default = limiter.limit(rate)(infer_default)
+        infer_named = limiter.limit(rate)(infer_named)
+
+    app.post("/infer", response_model=InferResponse)(infer_default)
+    app.post("/infer/{model_name}", response_model=InferResponse)(infer_named)
+
     @app.get("/metrics")
     def metrics(request: Request) -> dict:
         cache: PredictionCache | None = request.app.state.cache
-        batcher: DynamicBatcher | None = request.app.state.batcher
+        registry: ModelRegistry = request.app.state.registry
         out: dict = {}
         if cache is not None:
             stats = cache.stats()
@@ -130,14 +171,21 @@ def register_routes(app: FastAPI) -> None:
                 "size": stats.size,
                 "capacity": stats.capacity,
             }
-        if batcher is not None:
-            out["batcher"] = {
-                "queue_size": batcher.qsize(),
-                "avg_batch_size": batcher.avg_batch_size,
-                "max_batch_size": batcher.config.max_batch_size,
-                "max_wait_ms": batcher.config.max_wait_ms,
-                "batch_size_histogram": {str(k): v for k, v in batcher.batch_size_histogram().items()},
+        # One batcher per model — surface them as a map.
+        batchers_out: dict = {}
+        for entry in registry.all():
+            b: DynamicBatcher | None = entry.batcher
+            if b is None:
+                continue
+            batchers_out[entry.name] = {
+                "queue_size": b.qsize(),
+                "avg_batch_size": b.avg_batch_size,
+                "max_batch_size": b.config.max_batch_size,
+                "max_wait_ms": b.config.max_wait_ms,
+                "batch_size_histogram": {str(k): v for k, v in b.batch_size_histogram().items()},
             }
+        if batchers_out:
+            out["batchers"] = batchers_out
         controller: AdaptiveBatchController | None = request.app.state.controller
         if controller is not None:
             recent = controller.decisions[-10:]
@@ -160,7 +208,8 @@ def register_routes(app: FastAPI) -> None:
         return out
 
     @app.post("/admin/cache/reset")
-    def admin_cache_reset(request: Request) -> dict:
+    def admin_cache_reset(request: Request, authorization: str | None = Header(None)) -> dict:
+        _require_admin(authorization)
         cache: PredictionCache | None = request.app.state.cache
         if cache is None:
             raise HTTPException(status_code=404, detail="cache not enabled")
@@ -174,11 +223,6 @@ async def _submit_misses(
     miss_texts: list[str],
     timeout_sec: float,
 ) -> list[BatchResult]:
-    """Run the miss texts through the batcher (or directly through runner).
-
-    Raises QueueOverflowError if the queue is full or asyncio.TimeoutError
-    if any single submission exceeds timeout_sec.
-    """
     if batcher is not None:
         async def _one(t: str) -> BatchResult:
             return await asyncio.wait_for(batcher.submit(t), timeout=timeout_sec)
