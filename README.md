@@ -7,7 +7,7 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: mit
-short_description: FP32 vs INT8 DistilBERT side-by-side — same model, two precisions, two latency numbers.
+short_description: FP32 vs INT8 DistilBERT side by side
 ---
 
 # InferBench
