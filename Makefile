@@ -81,10 +81,12 @@ serve-gpu:
 	INFERBENCH_CONFIG=configs/server-gpu.yaml $(UVICORN) inferbench.server.app:app --host $(HOST) --port $(PORT)
 
 # GPU bring-up: install onnxruntime-gpu in the existing venv (mutually
-# exclusive with the CPU onnxruntime wheel — uninstall first).
+# exclusive with the CPU onnxruntime wheel — uninstall first). The >=1.22 pin
+# is for ORT's preload_dlls() API which inferbench.engine.model_runner uses on
+# Windows to find CUDA dependency DLLs from torch's bundled libs.
 gpu-install:
 	$(PIP) uninstall -y onnxruntime
-	$(PIP) install onnxruntime-gpu==1.20.1 onnxconverter-common
+	$(PIP) install "onnxruntime-gpu>=1.22" onnxconverter-common
 
 gpu-smoke:
 	$(PY) -m inferbench.tools.gpu_smoke
