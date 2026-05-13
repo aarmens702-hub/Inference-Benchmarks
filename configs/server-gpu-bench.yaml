@@ -1,0 +1,57 @@
+# InferBench server configuration — GPU bench profile (CUDA EP, cache off).
+#
+# Identical to server-gpu.yaml except:
+#   - cache.enabled is false (otherwise bench(B) measures LRU hits, not CUDA)
+#   - rate_limit is off (same as the GPU profile, restated for clarity)
+#
+# Used by `make bench-gpu`-style runs to produce honest CPU-vs-CUDA deltas;
+# the CPU baselines in results/run_002/, run_003/, run_007/ were taken when
+# the server cache was also disabled, so this keeps the comparison
+# apples-to-apples.
+#
+# fp32 is registered first (server default). Swap the model order in
+# server-gpu-bench-fp16.yaml to benchmark fp16.
+
+server:
+  host: 0.0.0.0
+  port: 8000
+  log_level: info
+
+models:
+  - name: fp32
+    path: models/distilbert-sst2-fp32
+    precision: fp32
+    backend: onnxruntime-cuda
+  - name: fp16
+    path: models/distilbert-sst2-fp16
+    precision: fp16
+    backend: onnxruntime-cuda
+  - name: int8
+    path: models/distilbert-sst2-int8
+    precision: int8-dynamic
+    backend: onnxruntime-cuda
+
+batching:
+  enabled: true
+  max_batch_size: 32
+  max_wait_ms: 5
+
+queue:
+  max_size: 2048
+  request_timeout_ms: 5000
+
+cache:
+  enabled: false
+
+controller:
+  enabled: false
+  latency_slo_ms: 50
+  min_batch_size: 1
+  max_batch_size: 64
+  adjust_interval_sec: 5
+
+rate_limit:
+  enabled: false
+
+demo:
+  enabled: false

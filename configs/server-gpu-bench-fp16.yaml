@@ -1,0 +1,47 @@
+# Variant of server-gpu-bench.yaml with fp16 registered first (server
+# default), so bench(B) hits the fp16 model via the default /infer route.
+# Everything else identical.
+
+server:
+  host: 0.0.0.0
+  port: 8000
+  log_level: info
+
+models:
+  - name: fp16
+    path: models/distilbert-sst2-fp16
+    precision: fp16
+    backend: onnxruntime-cuda
+  - name: fp32
+    path: models/distilbert-sst2-fp32
+    precision: fp32
+    backend: onnxruntime-cuda
+  - name: int8
+    path: models/distilbert-sst2-int8
+    precision: int8-dynamic
+    backend: onnxruntime-cuda
+
+batching:
+  enabled: true
+  max_batch_size: 32
+  max_wait_ms: 5
+
+queue:
+  max_size: 2048
+  request_timeout_ms: 5000
+
+cache:
+  enabled: false
+
+controller:
+  enabled: false
+  latency_slo_ms: 50
+  min_batch_size: 1
+  max_batch_size: 64
+  adjust_interval_sec: 5
+
+rate_limit:
+  enabled: false
+
+demo:
+  enabled: false

@@ -38,9 +38,13 @@ Both models classify the same input. Score agreement to four decimal places (0.9
 
 ![Headline result: bench(B) sweep](results/headline/concurrency_sweep.png)
 
-> Same model, same load. INT8 + dynamic batching takes peak throughput
-> from **240 → 670 req/s** while p99 at c=64 collapses from **2.5 s →
-> 110 ms**. Detailed breakdown in [`docs/TRADEOFFS.md`](docs/TRADEOFFS.md).
+> Same model, same load. On CPU alone, INT8 + dynamic batching takes
+> peak throughput from **240 → 670 req/s** and p99 at c=64 from **2.5 s
+> → 110 ms**. Adding the CUDA EP on an **RTX A2000 12GB** pushes peak to
+> **1916 req/s** at fp32 with p99=88 ms. fp16 surprisingly comes in
+> **11 % below fp32** on this hardware — see
+> [`docs/TRADEOFFS.md §8`](docs/TRADEOFFS.md) for the
+> Memcpy-boundary explanation.
 
 ---
 
