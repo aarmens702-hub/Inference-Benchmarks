@@ -51,17 +51,43 @@ def export_fp32(model_id: str, output_dir: Path) -> Path:
     return onnx_path
 
 
+def _convert_fp16_graph(fp32_onnx: Path, fp16_onnx: Path) -> None:
+    """Convert an fp32 ONNX graph to fp16.
+
+    Prefers `onnxruntime.transformers.float16.convert_float_to_float16` which
+    properly rewrites Cast `to=FLOAT` attributes to `to=FLOAT16` on transformer
+    graphs. Falls back to `onnxconverter_common.float16.convert_float_to_float16`
+    if the ORT helper isn't available (older onnxruntime wheels).
+
+    The fallback path can produce graphs where a Cast node still declares its
+    output as fp32 even though its input has become fp16, which makes ORT fail
+    to load the model with a tensor-type mismatch. The ORT helper is the only
+    reliable converter for the DistilBERT family.
+    """
+    import onnx
+
+    model = onnx.load(str(fp32_onnx))
+    try:
+        from onnxruntime.transformers.float16 import convert_float_to_float16
+        model_fp16 = convert_float_to_float16(
+            model,
+            keep_io_types=True,
+            disable_shape_infer=False,
+        )
+    except ImportError:
+        from onnxconverter_common import float16  # pragma: no cover
+        model_fp16 = float16.convert_float_to_float16(model, keep_io_types=True)
+    onnx.save(model_fp16, str(fp16_onnx))
+
+
 def export_fp16(model_id: str, output_dir: Path, fp32_dir: Path) -> Path:
     """Convert an existing fp32 ONNX export to fp16 in-place.
 
-    Pure graph transform via onnxconverter_common.float16. Reuses the
-    fp32 export's tokenizer and metadata so the runner sees the same
-    label mapping and input names.
+    Pure graph transform via ONNX Runtime's transformer-aware float16 helper.
+    Reuses the fp32 export's tokenizer and metadata so the runner sees the
+    same label mapping and input names.
     """
     import shutil
-
-    import onnx
-    from onnxconverter_common import float16
 
     if not fp32_dir.exists():
         raise FileNotFoundError(
@@ -80,11 +106,7 @@ def export_fp16(model_id: str, output_dir: Path, fp32_dir: Path) -> Path:
 
     fp32_onnx = fp32_dir / "model.onnx"
     fp16_onnx = output_dir / "model.onnx"
-    model = onnx.load(str(fp32_onnx))
-    # keep_io_types=True: keep int64 input ids / attention mask intact,
-    # only intermediate float tensors and weights become fp16.
-    model_fp16 = float16.convert_float_to_float16(model, keep_io_types=True)
-    onnx.save(model_fp16, str(fp16_onnx))
+    _convert_fp16_graph(fp32_onnx, fp16_onnx)
 
     fp32_meta = json.loads((fp32_dir / "metadata.json").read_text())
     metadata = {
