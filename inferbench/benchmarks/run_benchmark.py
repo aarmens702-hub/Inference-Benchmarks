@@ -47,6 +47,28 @@ def _next_run_dir(output_root: Path) -> Path:
     return run_dir
 
 
+def _gpu_info() -> dict | None:
+    """Best-effort GPU detection via nvidia-smi. None if unavailable."""
+    import shutil
+    import subprocess
+
+    if shutil.which("nvidia-smi") is None:
+        return None
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=name,driver_version,memory.total",
+             "--format=csv,noheader,nounits"],
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        ).decode().strip()
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+    if not out:
+        return None
+    name, driver, mem_mb = [x.strip() for x in out.splitlines()[0].split(",")]
+    return {"name": name, "driver_version": driver, "memory_mib": int(mem_mb)}
+
+
 def _system_info() -> dict:
     return {
         "hostname": socket.gethostname(),
@@ -54,6 +76,7 @@ def _system_info() -> dict:
         "python_version": platform.python_version(),
         "machine": platform.machine(),
         "cpu_count": os.cpu_count(),
+        "gpu": _gpu_info(),
     }
 
 
@@ -394,6 +417,11 @@ def main() -> None:
     parser.add_argument("--duration", type=float, default=None)
     parser.add_argument("--warmup", type=float, default=None)
     parser.add_argument("--output-root", type=Path, default=None)
+    parser.add_argument(
+        "--hardware",
+        default=None,
+        help="Free-text tag stored in run_meta (e.g. 'a2000-ada', 'cpu-m1', 'a10g-lambda')",
+    )
     args = parser.parse_args()
 
     config = yaml.safe_load(args.config.read_text())
@@ -406,6 +434,7 @@ def main() -> None:
         "scenario": args.scenario,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "base_url": base_url,
+        "hardware_tag": args.hardware,
         "system": _system_info(),
     }
 

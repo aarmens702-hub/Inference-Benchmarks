@@ -13,6 +13,7 @@ upstream in the server layer.
 from __future__ import annotations
 
 import json
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,6 +21,16 @@ from typing import Sequence
 
 import numpy as np
 import onnxruntime as ort
+
+# Windows-only: pip-installed onnxruntime-gpu can't find its CUDA dependency
+# DLLs (cufft64_11.dll, cublas, cudnn) through the standard search path because
+# Python 3.8+ tightened DLL loading. preload_dlls() (ORT 1.21+) walks torch and
+# nvidia-* pip packages to find the libs. No-op on Linux/macOS and on older ORT.
+if sys.platform == "win32" and hasattr(ort, "preload_dlls"):
+    try:
+        ort.preload_dlls(cuda=True, cudnn=True, msvc=False)
+    except Exception:
+        pass
 
 # `transformers` is heavy and is only needed to load the tokenizer in
 # ModelRunner.__init__. Tests use FakeRunner (which doesn't construct a
