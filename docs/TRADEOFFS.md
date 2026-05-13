@@ -208,7 +208,7 @@ M-series Mac to test CoreML.
 |--------------------|---------:|---------------|-----------------------------------------|
 | onnxruntime-cpu    |  3.31 ms | stable        | Best on M-series for transformer-class. |
 | onnxruntime-coreml | 17.00 ms | broken        | 287/417 nodes supported -> partitioned graph; 97-100 % errors at c≥4. |
-| onnxruntime-cuda   | 16.60 ms | stable        | Now covered — see §8 (RTX A2000 12GB, Windows). |
+| onnxruntime-cuda   | 16.60 ms | stable        | Now covered. See §8 (RTX A2000 12GB, Windows). |
 | onnxruntime-tensorrt |  n/a   | n/a           | Documented in BACKENDS.md, no run.      |
 
 CoreML EP isn't a free win on Apple Silicon for this workload. Two
@@ -228,50 +228,51 @@ diagnostic run.
 
 ## 8. CUDA on NVIDIA RTX A2000 (Week 1 GPU bring-up)
 
-The §7 table had `onnxruntime-cuda` flagged as `n/a` because the
-project had no NVIDIA host. Week 1 changed that: the same bench(B)
-sweep was re-run on a Windows 11 box with an RTX A2000 12GB
-(Ampere, sm_86), pip-installed `onnxruntime-gpu 1.26` and the
-`torch+cu124` wheel for its bundled CUDA DLLs (see
-[`docs/HARDWARE.md`](HARDWARE.md) §9).
+The §7 table had `onnxruntime-cuda` flagged as `n/a` because the project
+had no NVIDIA host. Week 1 changed that. The same bench(B) sweep ran
+again on a Windows 11 box with an RTX A2000 12GB (Ampere, sm_86),
+pip-installed `onnxruntime-gpu 1.26`, and the `torch+cu124` wheel for its
+bundled CUDA DLLs. Setup is in [`docs/HARDWARE.md`](HARDWARE.md) §9.
+
+![Peak throughput by backend and precision](../results/headline/cpu_vs_cuda_peak.png)
 
 ### 8.1 fp32 on CUDA EP (run_014)
 
-Server config: `configs/server-gpu-bench.yaml` — dynamic batching
-(max=32, wait=5ms), **cache disabled**, fp32 model. Cache-off is
-deliberate: the CPU baselines in §2 also ran cache-off, and the
-default GPU profile (`server-gpu.yaml`) leaves cache on for
-production. Without it, ~99.999 % of requests hit the LRU (only 13
-distinct texts in the benchmark workload) and the bench measures
-cache lookup, not CUDA inference.
+Server config: `configs/server-gpu-bench.yaml`. Dynamic batching
+(max=32, wait=5ms), **cache disabled**, fp32 model. The CPU baselines in
+§2 also ran with cache off, so this keeps the comparison apples to
+apples. The default GPU profile (`server-gpu.yaml`) leaves cache on for
+production; with that profile the bench measures cache lookup, not CUDA
+inference (about 99.999 % of requests hit the LRU because the workload
+uses only 13 distinct texts and the cache holds 8192 entries).
 
 | c  | p50    | p95    | p99    | rps    | vs CPU fp32 no-batch (run_002) |
 |----|--------|--------|--------|--------|--------------------------------|
-| 1  |  16.60 |  23.78 |  34.22 |   58.1 | p50 slower (cold transfer cost dominates a single request) |
-| 4  |   5.05 |   6.38 |   7.99 |  763.8 | rps **3.2×**                    |
-| 8  |   7.75 |  10.90 |  16.49 | 1012.5 | rps **5.2×**, p99 **-87 %**     |
-| 16 |  11.06 |  15.91 |  19.04 | 1396.8 | rps **8.1×**, p99 **-94 %**     |
-| 32 |  15.84 |  26.66 |  63.58 | 1803.5 | rps **7.7×**, p99 **-83 %**     |
-| 64 |  27.94 |  57.12 |  88.14 | 1915.8 | rps **8.1×**, p99 **-82 %**     |
+| 1  |  16.60 |  23.78 |  34.22 |   58.1 | p50 slower (cold transfer cost dominates) |
+| 4  |   5.05 |   6.38 |   7.99 |  763.8 | rps 3.2x                       |
+| 8  |   7.75 |  10.90 |  16.49 | 1012.5 | rps 5.2x, p99 -87 %            |
+| 16 |  11.06 |  15.91 |  19.04 | 1396.8 | rps 8.1x, p99 -94 %            |
+| 32 |  15.84 |  26.66 |  63.58 | 1803.5 | rps 7.7x, p99 -83 %            |
+| 64 |  27.94 |  57.12 |  88.14 | 1915.8 | rps 8.1x, p99 -82 %            |
 
-The c=1 row is the only one where CPU wins. A single sequential
-request on CUDA pays the host→device copy + kernel launch overhead
-that batching otherwise amortises across 32+ requests. Every other
-row is a clear win — peak throughput from 240 req/s (CPU fp32
-no-batch) to 1916 req/s on CUDA fp32, and p99 at c=64 drops from
-490 ms to 88 ms.
+CPU only wins at c=1. A single sequential request on CUDA pays the
+host-to-device copy and kernel launch cost that batching amortises
+across 32+ requests. Every other row is a clear win. Peak throughput
+goes from 240 req/s (CPU fp32 no-batch) to 1916 req/s on CUDA fp32, and
+p99 at c=64 drops from 490 ms to 88 ms.
 
-The vs-int8 comparison is the more interesting one: CPU int8
-static-batch peaked at 670 req/s in §5. CUDA fp32 peaks at 1916
-req/s — **2.9× higher than the best CPU number on the board**, with
-no quantization-accuracy loss.
+CUDA fp32 also beats the best CPU configuration on the board (CPU int8
+static-batch in run_007, 671 req/s peak) by 2.9x, with no quantisation
+accuracy loss.
 
-### 8.2 fp16 on CUDA EP (run_015) — slower than fp32
+### 8.2 fp16 on CUDA EP (run_015), slower than fp32
 
-This is the surprise of Week 1. Same hardware, same config, only
-the precision swapped to fp16 (graph-transform via
-`onnxconverter_common.float16.convert_float_to_float16`,
-`keep_io_types=True` so int64 input ids are preserved):
+This is the surprise of Week 1. Same hardware, same config, only the
+precision swapped to fp16 (graph transform via
+`onnxconverter_common.float16.convert_float_to_float16` with
+`keep_io_types=True` so the int64 input ids stay intact).
+
+![fp32 vs fp16 throughput on CUDA EP](../results/headline/fp32_vs_fp16_gpu.png)
 
 | c  | fp32 rps | fp16 rps | fp32 p99 | fp16 p99 |
 |----|----------|----------|----------|----------|
@@ -282,42 +283,43 @@ the precision swapped to fp16 (graph-transform via
 | 32 |  1803.5  |  1535.1  |    63.58 |    70.85 |
 | 64 |  1915.8  |  1706.8  |    88.14 |    95.70 |
 
-At c≤16, fp16 is within ±5 % of fp32. Past that, fp32 pulls **11 %**
-ahead at peak. The expected story — tensor-core fp16 multiplies are
-roughly 2× the fp32 throughput on Ampere — does not appear.
+At c≤16 the two precisions track within ±5 %. Past that, fp32 pulls
+about 11 % ahead at peak. The expected story (tensor-core fp16 matmuls
+running roughly 2x faster than fp32 on Ampere) does not appear.
 
 Two likely causes, in order of confidence:
 
-1. **`keep_io_types=True` forces fp16↔fp32 casts at I/O boundaries.**
+1. **`keep_io_types=True` forces fp16/fp32 casts at I/O boundaries.**
    The smoke test reports `96 Memcpy nodes added to the graph for
-   CUDAExecutionProvider` for the fp16 model (vs 6 for fp32). Each
-   Memcpy is a stop point where the engine cannot fuse further. At
-   small per-request compute (~67M-param model), the cast/memcpy
-   overhead is comparable to the kernel work it saves.
-2. **Small model, small batch.** DistilBERT-SST2 at batch ≤32 leaves
-   the A2000's 56 SMs underutilised. Tensor cores are most beneficial
-   when the matmuls are large enough to saturate them; here the
-   batched matmuls (32 × seq_len × 768) are below that threshold.
+   CUDAExecutionProvider` for the fp16 model versus 6 for fp32. Each
+   Memcpy is a fusion barrier. For a small model (about 67M params), the
+   per-request cast and copy cost lands in the same range as the kernel
+   work it saves.
+2. **Small model, small batch.** DistilBERT-SST2 at batch ≤32 leaves the
+   A2000's 56 SMs underutilised. Tensor cores pay off when the matmuls
+   are large enough to saturate them; here the batched matmuls
+   (32 x seq_len x 768) are below that threshold.
 
-What we *don't* claim: that fp16 is universally slower. On a larger
-model (e.g. DistilBERT → BERT-base, or any of the 7B-class LLMs),
-the tensor-core path matters and fp16 dominates. The honest finding
-for this benchmark is: **for a small encoder model on Ampere via the
-CUDA EP, fp32 wins at saturation**; fp16's only edge is a 19 % p50
-reduction at c=1, where neither precision is the right ops choice
-anyway (you'd batch instead).
+The narrow claim: for this small encoder on Ampere via the CUDA EP, fp32
+wins at saturation. The broader claim that fp16 is universally slower is
+not what this run shows. On larger models (BERT-base on up, and any of
+the 7B-class LLMs), the tensor-core path matters and fp16 wins. fp16's
+only edge here is a 19 % p50 reduction at c=1, which is the regime where
+neither precision is the right operations choice (you would batch
+instead).
 
-A follow-up worth running: fp16 via TensorRT EP, which compiles the
-whole graph and removes the Memcpy boundaries. That's a Week-2
-experiment.
+A follow-up worth running: fp16 via the TensorRT EP, which compiles the
+whole graph and removes the Memcpy boundaries. That goes in the Week 2
+queue alongside the `--hardware a10g-lambda` cloud fallback.
 
 ### 8.3 Headline chart update
 
-[`results/headline/concurrency_sweep.png`](../results/headline/concurrency_sweep.png)
+![bench(B) sweep: CPU vs CUDA](../results/headline/concurrency_sweep.png)
+
+The chart at [`results/headline/concurrency_sweep.png`](../results/headline/concurrency_sweep.png)
 now overlays both CUDA curves on the existing CPU sweep. The
-two-decade throughput gap (CUDA fp32 vs CPU fp32 no-batch) is
-visually obvious and is the cleanest single-figure version of the
-"swap hardware before swapping algorithms" point.
+two-decade throughput gap (CUDA fp32 vs CPU fp32 no-batch) is the
+single-figure version of "swap hardware before swapping algorithms".
 
 ---
 
