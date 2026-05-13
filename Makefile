@@ -9,8 +9,9 @@ SCENARIO ?= A
 HF_SPACE ?= huggingface.co/spaces/Aarmen/inferbench
 HF_REMOTE_NAME ?= space
 
-.PHONY: help install venv export-model quantize-model evaluate-accuracy \
-        serve test lint bench bench-k6 bench-clean clean \
+.PHONY: help install venv export-model export-model-fp16 quantize-model evaluate-accuracy \
+        serve serve-gpu test lint bench bench-gpu bench-k6 bench-clean clean \
+        gpu-smoke gpu-install \
         compose-up compose-down compose-logs ci \
         space-remote deploy-space
 
@@ -23,8 +24,15 @@ help:
 	@echo ""
 	@echo "  models:"
 	@echo "    export-model       export DistilBERT-SST2 to ONNX FP32"
+	@echo "    export-model-fp16  convert FP32 ONNX to FP16 (for CUDA EP)"
 	@echo "    quantize-model     quantize FP32 ONNX to INT8 dynamic"
 	@echo "    evaluate-accuracy  evaluate model on SST-2 validation"
+	@echo ""
+	@echo "  gpu (see docs/HARDWARE.md):"
+	@echo "    gpu-install        swap onnxruntime -> onnxruntime-gpu in .venv"
+	@echo "    gpu-smoke          verify CUDAExecutionProvider is reachable"
+	@echo "    serve-gpu          serve with configs/server-gpu.yaml"
+	@echo "    bench-gpu SCENARIO=B HARDWARE=a2000-ada  bench against GPU server"
 	@echo ""
 	@echo "  run / dev:"
 	@echo "    serve              run FastAPI on $(HOST):$(PORT)"
@@ -56,6 +64,9 @@ install:
 export-model:
 	$(PY) -m inferbench.models.export_model
 
+export-model-fp16:
+	$(PY) -m inferbench.models.export_model --precision fp16
+
 quantize-model:
 	$(PY) -m inferbench.models.quantize_model
 
@@ -65,6 +76,18 @@ evaluate-accuracy:
 
 serve:
 	$(UVICORN) inferbench.server.app:app --host $(HOST) --port $(PORT)
+
+serve-gpu:
+	INFERBENCH_CONFIG=configs/server-gpu.yaml $(UVICORN) inferbench.server.app:app --host $(HOST) --port $(PORT)
+
+# GPU bring-up: install onnxruntime-gpu in the existing venv (mutually
+# exclusive with the CPU onnxruntime wheel — uninstall first).
+gpu-install:
+	$(PIP) uninstall -y onnxruntime
+	$(PIP) install onnxruntime-gpu==1.20.1 onnxconverter-common
+
+gpu-smoke:
+	$(PY) -m inferbench.tools.gpu_smoke
 
 test:
 	$(PY) -m pytest -q
@@ -76,6 +99,12 @@ ci: lint test
 
 bench:
 	$(PY) -m inferbench.benchmarks.run_benchmark --scenario $(SCENARIO)
+
+# GPU bench: tags the run with HARDWARE (default a2000-ada). Assumes the
+# GPU server is already running (in another shell): `make serve-gpu`.
+HARDWARE ?= a2000-ada
+bench-gpu:
+	$(PY) -m inferbench.benchmarks.run_benchmark --scenario $(SCENARIO) --hardware $(HARDWARE)
 
 bench-k6:
 	k6 run inferbench/benchmarks/k6/infer_load_test.js
